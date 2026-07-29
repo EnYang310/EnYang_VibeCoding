@@ -86,7 +86,7 @@
 
 本课件会把这套东西从零讲清楚。你可以把它当成进入 DeepSeek 前的一份“AI PM 底层操作系统”。
 
-![Harness 控制室：模型核心被工具、上下文、评估、安全等工程层包围](assets/harness-engineering/harness-core-control-room.png)
+> 配图说明：Harness 控制室中，模型核心被工具、上下文、评估、安全等工程层包围。原图未随公开仓库发布，已移除失效链接。
 
 这张图可以先帮你建立一个直觉：
 
@@ -472,7 +472,7 @@ Harness Engineering 不是某个公司拍脑袋发明的新词，它是 LLM 产�
 
 这个工程系统，就是我们在这份课件里说的 Harness。
 
-![Raw Chat vs Harnessed Product：左边只是聊天框，右边才是能接工具、资料、权限和评估的产品系统](assets/harness-engineering/raw-chat-vs-harnessed-product.png)
+> 配图说明：Raw Chat 只有聊天入口；Harnessed Product 还连接工具、资料、权限和评估。原图未随公开仓库发布，已移除失效链接。
 
 你可以把上图理解成：
 
@@ -665,7 +665,7 @@ ReAct = 让模型在“思考”和“行动”之间循环。
 
 这就是 Agent Workflow。
 
-![Harness 演进故事图：从孤立模型，到资料、工具、Agent 流程、协议连接和企业产品驾驶舱](assets/harness-engineering/harness-evolution-story.png)
+> 配图说明：Harness 从孤立模型，逐步演进到资料、工具、Agent 流程、协议连接和企业产品驾驶舱。原图未随公开仓库发布，已移除失效链接。
 
 Agent Workflow 解决了“任务流程”的问题，但又暴露出新的问题：
 
@@ -783,7 +783,7 @@ Skill 让模型“知道如何完成某类任务”。
 
 ### A.10 因果链总图
 
-![Harness Engineering 因果链：从聊天入口到上下文、工具、流程、协议、技能、评估和治理](assets/harness-engineering/harness-causal-chain.svg)
+> 配图说明：Harness Engineering 因果链覆盖聊天入口、上下文、工具、流程、协议、技能、评估和治理。原图未随公开仓库发布，已移除失效链接。
 
 这张图你可以背成一句话：
 
@@ -791,7 +791,7 @@ Skill 让模型“知道如何完成某类任务”。
 
 ### A.11 冰山图：为什么用户看不见 Harness，却会为 Harness 付费
 
-![LLM 产品冰山图：用户看到结果，水面下是上下文、工具、流程、技能、运行时、评估和治理](assets/harness-engineering/harness-product-iceberg.svg)
+> 配图说明：LLM 产品像冰山，用户看到结果，水面下是上下文、工具、流程、技能、运行时、评估和治理。原图未随公开仓库发布，已移除失效链接。
 
 用户不会说：
 
@@ -855,7 +855,7 @@ Skill 让模型“知道如何完成某类任务”。
 
 ### A.13 Harness Engineering 飞轮
 
-![Harness Engineering 飞轮：模型能力上升、用户任务变大、复杂性暴露、工程层沉淀](assets/harness-engineering/harness-causal-flywheel.svg)
+> 配图说明：Harness Engineering 飞轮由模型能力上升、用户任务变大、复杂性暴露和工程层沉淀共同推动。原图未随公开仓库发布，已移除失效链接。
 
 这个飞轮会不断发生：
 
@@ -903,7 +903,7 @@ Harness Engineering 是一类工程实践：
 Harness Engineering = 把“模型能力”工程化为“可执行、可评估、可治理的产品能力”。
 ```
 
-![什么算 Harness Engineering：Instruction、Context、Tools、Skills、Workflow、Runtime、Eval、Governance 都属于模型外工程系统](assets/harness-engineering/harness-scope-map.svg)
+> 配图说明：Instruction、Context、Tools、Skills、Workflow、Runtime、Eval、Governance 都属于模型外工程系统。原图未随公开仓库发布，已移除失效链接。
 
 这张图要帮你建立一个判断标准：
 

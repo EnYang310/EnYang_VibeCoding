@@ -1,0 +1,15 @@
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+**/.next
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.log
+backend/data/*
+!backend/data/nutrition.db
+backend/data/.kimi-key
+frontend/out
+outputs

@@ -282,12 +282,14 @@ stateDiagram-v2
 
 ```bash
 cd "圆头耄耋智能配菜Agent"
-python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
-.venv/bin/python -m pytest backend/tests -q
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend \
+  backend/.venv/bin/python -m unittest discover \
+  -s backend/tests -p 'test_*.py' -q
 ```
 
-Expected: 全部后端测试通过；`.venv/` 被 `.gitignore` 排除。
+Expected: 170 个后端 unittest 全部通过；`backend/.venv/` 被 `.gitignore` 排除。
 
 - [ ] **Step 2: 安装并运行前端测试**
 
