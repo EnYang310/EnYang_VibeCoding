@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.DS_Store
+backend/.venv/
+backend/.venv*/
+client/node_modules/
+client/dist/

@@ -1,0 +1,15 @@
+{
+  "description": "钱程 AI 理财启蒙课（Taro 原生小程序构建）",
+  "compileType": "miniprogram",
+  "libVersion": "3.9.0",
+  "appid": "wx10cf06332afa9800",
+  "projectname": "qiancheng-finance-learning",
+  "miniprogramRoot": "dist/weapp/",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  }
+}
