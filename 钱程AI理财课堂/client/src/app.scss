@@ -1,2 +1,3 @@
 page { background: #f7f4ed; color: #20332d; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
-* { box-sizing: border-box; }
+/* WXSS 不支持 * 通配符，改为枚举常用组件 */
+page, view, text, image, button, input, textarea, scroll-view, swiper, swiper-item, form, label, navigator, video, audio, canvas, progress, slider, switch, checkbox, radio, picker, rich-text, cover-view, cover-image, movable-view, movableView, functional-page-navigator { box-sizing: border-box; }
