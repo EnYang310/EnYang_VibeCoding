@@ -38,8 +38,38 @@ type AwaitingNext = { unitId: string, nextUnitId: string, answer: string }
 const sceneVoiceId = (unitId: string, scene: TeachingScene) => `scene-${unitId}-${scene.screen_title}-${scene.full_caption.join('').slice(0, 24)}`
 
 type VoiceSubtitle = { text: string, begin_time: number, end_time: number, begin_index: number, end_index: number }
-type VoiceSegment = { audio_url: string, subtitles: VoiceSubtitle[] }
+type VoiceSegment = { audio_url: string, audio_base64?: string, subtitles: VoiceSubtitle[] }
 type SpeechStatus = { sceneId: string | null, paused: boolean, subtitles: VoiceSubtitle[], activeIndex: number, paragraphIndex: number }
+
+type ApiResult<T> = { data: T, statusCode: number }
+const isWeapp = process.env.TARO_ENV === 'weapp'
+
+// H5 keeps same-origin HTTP requests. The mini program uses CloudBase's
+// private WeChat-to-container channel, which is why no request-domain entry
+// is needed in the WeChat public platform console.
+async function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown): Promise<ApiResult<T>> {
+  if (isWeapp) {
+    const cloud = (globalThis as typeof globalThis & { wx?: { cloud?: { callContainer: (options: Record<string, unknown>) => Promise<{ data: T }> } } }).wx?.cloud
+    if (!cloud) throw new Error('请在微信开发者工具中启用云开发环境')
+    const result = await cloud.callContainer({
+      config: { env: CLOUDBASE_ENV_ID },
+      path,
+      method,
+      data,
+      header: { 'X-WX-SERVICE': CLOUDBASE_SERVICE, 'content-type': 'application/json' }
+    })
+    return { data: result.data, statusCode: 200 }
+  }
+  return Taro.request<T>({ url: `${API_BASE}${path}`, method, data })
+}
+
+function materializeMiniAudio(segment: VoiceSegment, index: number): string {
+  if (!segment.audio_base64) return segment.audio_url
+  const fs = Taro.getFileSystemManager()
+  const path = `${Taro.env.USER_DATA_PATH}/qiancheng-voice-${Date.now()}-${index}.mp3`
+  fs.writeFileSync(path, segment.audio_base64, 'base64')
+  return path
+}
 
 function useLectureVoice() {
   const [status, setStatus] = useState<SpeechStatus>({ sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
@@ -83,7 +113,7 @@ function useLectureVoice() {
       // This removes the former "wait for five paragraphs" dead time.
       const getSegments = async (part: string[]) => {
         if (!part.length) return [] as VoiceSegment[]
-        const response = await Taro.request({ url: `${API_BASE}/api/v1/voice/synthesize`, method: 'POST', data: { paragraphs: part } })
+        const response = await apiRequest<{ segments?: VoiceSegment[], detail?: string }>('/api/v1/voice/synthesize', 'POST', { paragraphs: part })
         const data = response.data as { segments?: VoiceSegment[], detail?: string }
         if (response.statusCode >= 400 || !data.segments?.length) throw new Error(data.detail || '朗读音频暂时不可用')
         return data.segments
@@ -110,7 +140,9 @@ function useLectureVoice() {
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
           return
         }
-        const src = /^https?:\/\//.test(nextSegment.audio_url) ? nextSegment.audio_url : `${API_BASE}${nextSegment.audio_url}`
+        const src = isWeapp
+          ? materializeMiniAudio(nextSegment, currentIndex)
+          : (/^https?:\/\//.test(nextSegment.audio_url) ? nextSegment.audio_url : `${API_BASE}${nextSegment.audio_url}`)
         setStatus({ sceneId, paused: false, subtitles: nextSegment.subtitles, activeIndex: 0, paragraphIndex: currentIndex })
         if (isWebAudio()) {
           const audio = webAudioRef.current || new Audio()
@@ -245,9 +277,8 @@ export default function Index() {
       autoReadNextSceneRef.current = false
       lectureVoice.stop()
       const nextUnit = course.units[1]
-      Taro.request({
-        url: `${API_BASE}/api/v1/lessons/interaction-card`, method: 'POST',
-        data: { course_id: course.id, unit_id: nextUnit?.id }
+      apiRequest<Partial<PresentedCard>>('/api/v1/lessons/interaction-card', 'POST', {
+        course_id: course.id, unit_id: nextUnit?.id
       }).then(result => {
         const card = result.data as Partial<PresentedCard>
         if (result.statusCode >= 400 || card.tool_name !== 'present_interaction_card' || card.unit_id !== nextUnit?.id) throw new Error('first card failed')
@@ -266,10 +297,8 @@ export default function Index() {
     let cancelled = false
     setPresentedCard(null)
     setCardLoading(true)
-    Taro.request({
-      url: `${API_BASE}/api/v1/lessons/interaction-card`,
-      method: 'POST',
-      data: { course_id: course.id, unit_id: unit.id }
+    apiRequest<Partial<PresentedCard>>('/api/v1/lessons/interaction-card', 'POST', {
+      course_id: course.id, unit_id: unit.id
     }).then(result => {
       const data = result.data as Partial<PresentedCard>
       if (!cancelled && result.statusCode < 400 && data.tool_name === 'present_interaction_card' && data.unit_id === unit.id) setPresentedCard(data as PresentedCard)
@@ -324,10 +353,7 @@ export default function Index() {
     setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), userMessage, pendingMessage] }))
     setSending(true)
     try {
-      const result = await Taro.request({
-        url: `${API_BASE}/api/v1/lessons/chat`,
-        method: 'POST',
-        data: {
+      const result = await apiRequest<{ reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }>('/api/v1/lessons/chat', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
           message,
@@ -344,7 +370,6 @@ export default function Index() {
             next_unit_id: awaitingNext?.unitId === unit.id ? awaitingNext.nextUnitId : '',
             course_finished: courseChatCompleted
           }
-        }
       })
       const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.reply) throw new Error('chat request failed')
@@ -378,9 +403,18 @@ export default function Index() {
     setSubmittingInteraction(true)
     if (!nextUnit) {
       try {
-        const result = await Taro.request({
-          url: `${API_BASE}/api/v1/lessons/chat`, method: 'POST',
-          data: { course_id: course.id, unit_id: unit.id, message: `【课程完成】我完成了行动卡：${humanizeInteractionAnswer(submitted)}`, history: chat.slice(-6).map(item => ({ role: item.role, content: item.text })), context: { answer_summaries: Object.entries(progress!.answers).map(([index, text]) => `回合 ${Number(index) + 1}：${humanizeInteractionAnswer(text).slice(0, 300)}`), pending_review_units: progress!.reviewUnits, current_card_completed: true, current_card_answer: humanizeInteractionAnswer(submitted), course_finished: true } }
+        const result = await apiRequest<{ reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }>('/api/v1/lessons/chat', 'POST', {
+          course_id: course.id,
+          unit_id: unit.id,
+          message: `【课程完成】我完成了行动卡：${humanizeInteractionAnswer(submitted)}`,
+          history: chat.slice(-6).map(item => ({ role: item.role, content: item.text })),
+          context: {
+            answer_summaries: Object.entries(progress!.answers).map(([index, text]) => `回合 ${Number(index) + 1}：${humanizeInteractionAnswer(text).slice(0, 300)}`),
+            pending_review_units: progress!.reviewUnits,
+            current_card_completed: true,
+            current_card_answer: humanizeInteractionAnswer(submitted),
+            course_finished: true
+          }
         })
         const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }
         if (result.statusCode >= 400 || !data.reply) throw new Error('action card feedback failed')
@@ -396,10 +430,7 @@ export default function Index() {
       return
     }
     try {
-      const result = await Taro.request({
-        url: `${API_BASE}/api/v1/lessons/interaction-turn`,
-        method: 'POST',
-        data: {
+      const result = await apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
           next_unit_id: nextUnit.id,
@@ -412,7 +443,6 @@ export default function Index() {
             current_card_completed: true,
             current_card_answer: humanizeInteractionAnswer(submitted)
           }
-        }
       })
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.assistant_reply?.reply || (data.tool_call && (data.tool_call.tool_name !== 'present_interaction_card' || data.tool_call.unit_id !== nextUnit.id))) throw new Error('interaction turn failed')

@@ -90,6 +90,10 @@ class VoiceSubtitle(BaseModel):
 
 class VoiceSegment(BaseModel):
     audio_url: str
+    # The mini program receives audio through callContainer rather than a
+    # public URL. It writes this payload to its sandbox and plays that local
+    # file, so no media-domain whitelist is required.
+    audio_base64: str | None = None
     subtitles: list[VoiceSubtitle] = Field(default_factory=list)
 
 

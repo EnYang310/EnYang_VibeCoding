@@ -71,5 +71,11 @@ class TencentVoiceService:
                     if item.Text and item.EndTime > item.BeginTime
                 ]
                 manifest.write_text(json.dumps({"subtitles": [item.model_dump() for item in subtitles]}, ensure_ascii=False), "utf-8")
-            segments.append(VoiceSegment(audio_url=f"/media/voice/{filename}", subtitles=subtitles))
+            segments.append(
+                VoiceSegment(
+                    audio_url=f"/media/voice/{filename}",
+                    audio_base64=base64.b64encode(target.read_bytes()).decode("ascii"),
+                    subtitles=subtitles,
+                )
+            )
         return segments
