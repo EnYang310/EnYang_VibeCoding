@@ -4,7 +4,7 @@ const apiBase = (process.env.API_BASE || '').trim()
 // Mini programs call the deployed CloudBase Run service through WeChat's
 // private callContainer channel.  It deliberately does not need a public
 // request domain or an ICP-filed custom domain.
-const cloudbaseEnvId = (process.env.CLOUDBASE_ENV_ID || 'maodie-ai-d7gcaowhk300e638f').trim()
+const cloudbaseEnvId = (process.env.CLOUDBASE_ENV_ID || '287874-10-1325700028').trim()
 const cloudbaseService = (process.env.CLOUDBASE_SERVICE || 'qiancheng-ai-finance-agent').trim()
 
 export default {
