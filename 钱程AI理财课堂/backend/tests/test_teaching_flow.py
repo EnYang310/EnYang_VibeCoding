@@ -9,15 +9,29 @@ from app.teaching_flow import (
 )
 
 
-def test_forces_the_next_card_after_one_complete_teacher_explanation():
+def test_forces_the_next_card_after_three_complete_teacher_explanations():
     assert should_present_next_card(
         current_card_completed=True,
         course_finished=False,
         next_unit_id="hands-on",
         assistant_replies_since_card=0,
         gate_passed=False,
+    ) is False
+    assert should_present_next_card(
+        current_card_completed=True,
+        course_finished=False,
+        next_unit_id="hands-on",
+        assistant_replies_since_card=1,
+        gate_passed=False,
+    ) is False
+    assert should_present_next_card(
+        current_card_completed=True,
+        course_finished=False,
+        next_unit_id="hands-on",
+        assistant_replies_since_card=2,
+        gate_passed=False,
     ) is True
-    assert MAX_ASSISTANT_REPLIES_BETWEEN_CARDS == 1
+    assert MAX_ASSISTANT_REPLIES_BETWEEN_CARDS == 3
 
 
 def test_does_not_force_cards_after_the_course_is_complete():
