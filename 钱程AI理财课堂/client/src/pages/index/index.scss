@@ -328,6 +328,105 @@ $green: #2e6d5b;
   .chat-compose button { min-height: 50px; font-size: 15px; }
 }
 
+/* Phone is the primary learning surface.  These are deliberately readable
+   teaching sizes, not compact dashboard sizes. */
+@media (max-width: 760px) {
+  .lesson-page .eyebrow,
+  .teacher-line,
+  .lesson-page .choice-label,
+  .artifact-label { font-size: 14px; letter-spacing: .045em; }
+
+  .lesson-page .lesson-title { font-size: 42px; }
+  .course-start-title { font-size: 29px; }
+  .course-start-copy,
+  .course-start-focus,
+  .card-teacher-intro { font-size: 19px; line-height: 1.72; }
+  .choice-context { padding: 15px 14px; font-size: 18px; line-height: 1.7; }
+
+  .teaching-stage .course-start-card { padding: 24px 20px; }
+  .teaching-scene-message { padding: 25px 20px; }
+  .scene-title { font-size: 36px; }
+  .scene-summary { font-size: 20px; line-height: 1.7; }
+  .voice-toggle { padding: 11px 13px; font-size: 15px; }
+
+  .artifact-card, .artifact-card:nth-child(3n + 1) { padding: 21px 19px; }
+  .artifact-title { font-size: 27px; }
+  .artifact-lead,
+  .artifact-note,
+  .artifact-step,
+  .artifact-plain-items,
+  .timeline-artifact-row,
+  .contrast-column { font-size: 19px; line-height: 1.68; }
+
+  .stage-question-card { padding: 26px 20px; }
+  .choice-question { font-size: 30px; line-height: 1.35; }
+  .single-choice-options { gap: 13px; }
+  .single-choice-option { min-height: 82px; padding: 19px 18px; font-size: 20px; line-height: 1.48; }
+  .choice-index { font-size: 16px; }
+  .submission-hint { font-size: 16px; }
+  .primary-action, .stage-confirm { min-height: 68px; font-size: 22px !important; }
+
+  .caption-dock { min-height: 76px; padding: 12px 16px; }
+  .caption-short, .caption-synced { font-size: 17px; line-height: 1.65; }
+  .caption-expand { font-size: 15px; }
+  .teaching-stage .classroom-composer { padding: 14px 16px calc(15px + env(safe-area-inset-bottom)); }
+  .chat-compose input { min-height: 56px; font-size: 18px; }
+  .chat-compose button { width: 82px; min-height: 56px; font-size: 18px; }
+}
+
+/* Large-screen and phone teaching type: occupy the classroom with content,
+   rather than making a sparse dashboard around tiny copy. */
+.teacher-line,
+.lesson-page .choice-label,
+.artifact-label { font-size: clamp(14px, .9vw, 18px); }
+
+.course-start-copy,
+.course-start-focus,
+.card-teacher-intro { font-size: clamp(19px, 1.3vw, 25px); }
+
+.choice-context { font-size: clamp(18px, 1.2vw, 23px); }
+.artifact-lead,
+.artifact-note,
+.artifact-step,
+.artifact-plain-items,
+.timeline-artifact-row,
+.contrast-column { font-size: clamp(19px, 1.2vw, 24px); }
+
+.chat-bubble { font-size: clamp(19px, 1.2vw, 24px); }
+.caption-short,
+.caption-synced { font-size: clamp(18px, 1.15vw, 23px); }
+
+@media (min-width: 761px) {
+  .course-start-title { font-size: clamp(31px, 2.3vw, 44px); }
+  .teaching-stage .course-start-card { padding: clamp(30px, 3vw, 52px); }
+  .teaching-scene-message { min-height: 300px; }
+  .stage-question-card { min-height: 430px; }
+  .artifact-card { min-height: clamp(220px, 16vw, 320px); }
+  .scene-summary { font-size: clamp(21px, 1.45vw, 27px); }
+  .choice-question { font-size: clamp(34px, 2.5vw, 52px); }
+  .single-choice-option { min-height: clamp(142px, 10vw, 196px); font-size: clamp(21px, 1.45vw, 28px); }
+  .primary-action, .stage-confirm { min-height: clamp(70px, 5vw, 88px); font-size: clamp(22px, 1.65vw, 30px) !important; }
+}
+
+@media (max-width: 760px) {
+  .course-start-copy,
+  .course-start-focus,
+  .card-teacher-intro { font-size: 21px; }
+  .choice-context { font-size: 20px; }
+  .artifact-lead,
+  .artifact-note,
+  .artifact-step,
+  .artifact-plain-items,
+  .timeline-artifact-row,
+  .contrast-column { font-size: 20px; }
+  .chat-bubble { font-size: 20px; }
+  .caption-short, .caption-synced { font-size: 18px; }
+  .teaching-stage .course-start-card { min-height: 200px; }
+  .teaching-scene-message { min-height: 260px; }
+  .stage-question-card { min-height: 540px; }
+  .artifact-card, .artifact-card:nth-child(3n + 1) { min-height: 180px; }
+}
+
 @media (max-width: 620px) {
   .page { padding: 22px 14px 32px; }
   .hero-block { margin-top: 30px; padding: 28px 22px; border-radius: 24px; }
