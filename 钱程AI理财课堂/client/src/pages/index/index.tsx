@@ -7,6 +7,7 @@ import { readLearningHomeState } from '../../learning-storage'
 import { createLessonSession, type LessonSession } from '../../lesson-session'
 import { shouldRevealDeferredInteractionCard, type DeferredInteractionCard } from '../../deferred-interaction-card'
 import { answerReceivedMessage, answerRequestFailedMessage } from '../../teacher-turn-feedback'
+import { shouldSettleVoiceScene } from '../../voice-settlement'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
 import './index.scss'
@@ -103,8 +104,14 @@ function useLectureVoice(session: LessonSession) {
   const toggle = useCallback(async (sceneId: string, paragraphs: string[]) => {
     if (status.sceneId === sceneId) {
       if (status.paused) {
-        if (isWebAudio()) await webAudioRef.current?.play().catch(() => undefined)
-        else miniAudioRef.current?.play()
+        if (isWebAudio()) {
+          try {
+            await webAudioRef.current?.play()
+          } catch {
+            Taro.showToast({ title: '浏览器仍未允许播放，请再点一次', icon: 'none' })
+            return
+          }
+        } else miniAudioRef.current?.play()
         setStatus(current => ({ ...current, paused: false }))
       } else {
         if (isWebAudio()) webAudioRef.current?.pause()
@@ -151,7 +158,7 @@ function useLectureVoice(session: LessonSession) {
             return playNext()
           }
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
-          setSettledSceneId(sceneId)
+          if (shouldSettleVoiceScene('ended')) setSettledSceneId(sceneId)
           return
         }
         const src = isWeapp
@@ -172,15 +179,18 @@ function useLectureVoice(session: LessonSession) {
           audio.onerror = () => {
             if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
             setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
-            setSettledSceneId(sceneId)
-            Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
+            if (shouldSettleVoiceScene('playback_error')) setSettledSceneId(sceneId)
+            Taro.showToast({ title: '朗读没有开始，点“朗读本段”重试', icon: 'none' })
           }
           audio.src = src
           audio.play().catch(() => {
             if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
-            setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
-            setSettledSceneId(sceneId)
-            Taro.showToast({ title: '浏览器阻止自动播放，点“朗读本段”即可播放', icon: 'none' })
+            // Autoplay permission is a browser policy, not the end of this
+            // lecture. Keep the scene active so its deferred question remains
+            // locked until the learner deliberately starts playback.
+            setStatus(current => current.sceneId === sceneId ? { ...current, paused: true } : current)
+            if (shouldSettleVoiceScene('autoplay_blocked')) setSettledSceneId(sceneId)
+            Taro.showToast({ title: '浏览器需要你点一下“继续朗读”才可播放', icon: 'none' })
           })
           return
         }
@@ -198,8 +208,8 @@ function useLectureVoice(session: LessonSession) {
         audio.onError(() => {
           if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
-          setSettledSceneId(sceneId)
-          Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
+          if (shouldSettleVoiceScene('playback_error')) setSettledSceneId(sceneId)
+          Taro.showToast({ title: '朗读没有开始，点“朗读本段”重试', icon: 'none' })
         })
         audio.src = src
         audio.play()
@@ -208,7 +218,7 @@ function useLectureVoice(session: LessonSession) {
     } catch (error) {
       if (!session.isCurrent(sessionToken)) return
       setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
-      setSettledSceneId(sceneId)
+      if (shouldSettleVoiceScene('playback_error')) setSettledSceneId(sceneId)
       Taro.showToast({ title: error instanceof Error ? error.message : '朗读暂时不可用', icon: 'none' })
       return
     }

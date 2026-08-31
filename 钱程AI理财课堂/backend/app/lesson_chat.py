@@ -131,12 +131,6 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         # Real purchase, sale, allocation and product-selection questions never
         # reach the external model. The boundary is deterministic, not prompt-only.
         return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
-    # A submitted interaction card already contains the learner's selected
-    # answer and a fixed lesson boundary.  Waiting for a large model JSON here
-    # only delays the class; the courseware teacher can immediately deliver the
-    # full explanation, components, audio, and the next-card handoff.
-    if request.context.current_card_completed:
-        return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
     offer_transition = request.message.startswith("我完成了这张互动卡")
     generated = await KimiClient().lesson_chat(
         course_title=course["title"],

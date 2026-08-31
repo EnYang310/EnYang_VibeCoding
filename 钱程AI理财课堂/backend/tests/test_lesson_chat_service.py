@@ -2,7 +2,7 @@ import pytest
 
 from app.kimi import _safe_chat_generated
 from app.lesson_chat import personalized_lesson_chat, sanitize_user_text
-from app.schemas import ChatRequest
+from app.schemas import ChatRequest, ChatResponse, TeachingScene
 
 
 def test_generated_reply_rejects_evidence_outside_current_lesson():
@@ -118,13 +118,29 @@ async def test_missing_key_falls_back_to_courseware_reply(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_completed_interaction_uses_the_fast_courseware_teacher_without_waiting_for_the_model(monkeypatch):
+async def test_completed_interaction_keeps_the_teacher_response_personalized(monkeypatch):
     called = False
 
     async def fake_lesson_chat(*_args, **_kwargs):
         nonlocal called
         called = True
-        raise AssertionError("a completed card must use the immediate lesson path")
+        return ChatResponse(
+            reply="你留出了房租，抓住了最早使用日期这个关键。",
+            evidence_ids=["money-jobs.core-1"],
+            learning_signals=[],
+            suggested_optional_card=None,
+            advance_recommendation="continue",
+            teaching_decision="advance",
+            observed_criteria=["能指出不分用途可能造成遗漏、冲突或挤压"],
+            missing_criterion=None,
+            next_step_invitation="如果房租日期提前，你觉得这个判断会怎么变？",
+            teaching_scene=TeachingScene(
+                screen_title="先保住房租",
+                full_caption=["先保住近期用途，后面的安排才站得住。" for _ in range(6)],
+            ),
+            compliance_mode="education_only",
+            source="kimi",
+        )
 
     monkeypatch.setattr("app.lesson_chat.KimiClient.lesson_chat", fake_lesson_chat)
     response = await personalized_lesson_chat(
@@ -136,8 +152,8 @@ async def test_completed_interaction_uses_the_fast_courseware_teacher_without_wa
         )
     )
 
-    assert called is False
-    assert response.source == "local_fallback"
+    assert called is True
+    assert response.source == "kimi"
     assert response.teaching_scene is not None
     assert len(response.teaching_scene.full_caption) == 6
-    assert "自己的生活里" in response.reply
+    assert "房租日期提前" in response.reply
