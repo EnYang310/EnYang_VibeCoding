@@ -57,7 +57,7 @@ class TeachingArtifact(BaseModel):
     """
 
     kind: Literal["one_liner", "steps", "timeline", "contrast", "scenario", "checklist", "quote", "warning"]
-    appear_after_paragraph: int = Field(ge=0, le=4)
+    appear_after_paragraph: int = Field(ge=0, le=6)
     title: str = Field(min_length=2, max_length=36)
     lead: str = Field(default="", max_length=120)
     items: list[str] = Field(default_factory=list, max_length=4)
@@ -73,15 +73,15 @@ class TeachingScene(BaseModel):
     common_misconception: str = Field(default="", max_length=100)
     right_reframe: str = Field(default="", max_length=100)
     subtitle_excerpt: str = Field(default="", max_length=140)
-    full_caption: list[str] = Field(min_length=3, max_length=5)
-    teaching_artifacts: list[TeachingArtifact] = Field(default_factory=list, max_length=4)
+    full_caption: list[str] = Field(min_length=6, max_length=8)
+    teaching_artifacts: list[TeachingArtifact] = Field(default_factory=list, max_length=7)
 
 
 class VoiceSynthesisRequest(BaseModel):
     # Only teacher-authored caption paragraphs are accepted.  User chat is
     # deliberately excluded so the service does not turn private input into a
     # retained audio artifact.
-    paragraphs: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(min_length=1, max_length=5)
+    paragraphs: list[Annotated[str, Field(min_length=1, max_length=180)]] = Field(min_length=1, max_length=8)
 
 
 class VoiceSubtitle(BaseModel):
