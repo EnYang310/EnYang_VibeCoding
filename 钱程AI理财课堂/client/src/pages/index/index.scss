@@ -708,3 +708,56 @@ $green: #2e6d5b;
   :root { --qc-bg: #15211e; --qc-surface: #1b2b27; --qc-soft: #20332e; --qc-ink: #edf5f0; --qc-body: #c1d2ca; --qc-muted: #91a59b; --qc-line: #385149; --qc-accent: #34a97f; --qc-accent-dark: #91dfbd; --qc-accent-wash: #183e31; --qc-shadow: none; }
   .lesson-page .topbar, .scene-heading { border-color: var(--qc-line); }.lesson-page .lesson-position, .teaching-stage .course-start-card, .teaching-scene-message, .stage-question-card, .artifact-card, .single-choice-option, .chat-compose input, .teaching-stage .classroom-composer { background: var(--qc-surface); border-color: var(--qc-line); }.classroom-transcript, .caption-dock { background: #182723; }.artifact-scenario { background: #19342b; }.artifact-one_liner, .artifact-quote { background: var(--qc-accent-wash); }.artifact-warning { background: #392722; }.choice-context { background: var(--qc-soft); color: var(--qc-body); }.single-choice-option.selected { background: var(--qc-accent-wash); }.chat-bubble.assistant { background: #20342e; border-color: var(--qc-line); }.caption-token.active { color: #062b1d; }.chat-compose input { color: var(--qc-ink); }
 }
+
+/* A desktop classroom is a fluid workspace.  Do not centre a small phone-like
+   canvas inside a large monitor: only text measures are constrained where a
+   readable line length matters. */
+@media (min-width: 761px) {
+  .lesson-page {
+    width: 100%;
+    max-width: none;
+    padding: clamp(28px, 2.8vw, 68px) clamp(34px, 4.6vw, 118px) clamp(34px, 3.4vw, 78px);
+  }
+
+  .lesson-page .topbar,
+  .lesson-page .unit-progress,
+  .lesson-page .classroom-title,
+  .lesson-page .teaching-stage,
+  .lesson-page .restart-link,
+  .lesson-page .compliance-note {
+    width: 100%;
+    max-width: none;
+  }
+
+  .lesson-page .classroom-title { margin-top: clamp(28px, 3.2vw, 58px); margin-bottom: clamp(22px, 2.6vw, 42px); }
+  .lesson-page .lesson-title { font-size: clamp(42px, 3.2vw, 70px); }
+  .lesson-page .classroom-title::after { font-size: clamp(17px, 1.25vw, 24px); }
+
+  .teaching-stage { height: calc(100dvh - clamp(190px, 16vh, 300px)); min-height: 680px; max-height: none; }
+  .classroom-transcript { padding: clamp(28px, 3vw, 62px); }
+
+  .timeline-turn,
+  .teaching-scene-message,
+  .stage-question-card,
+  .stage-loading { width: 100%; max-width: none; }
+
+  .teaching-scene-message { padding: clamp(30px, 3vw, 56px); }
+  .scene-title { max-width: 24ch; font-size: clamp(36px, 3vw, 60px); }
+  .scene-summary { max-width: 72ch; font-size: clamp(19px, 1.35vw, 25px); }
+
+  .artifact-stream { gap: clamp(16px, 1.4vw, 28px); }
+  .artifact-card { min-height: clamp(176px, 13vw, 252px); padding: clamp(24px, 2vw, 38px); }
+  .artifact-title { font-size: clamp(25px, 1.9vw, 36px); }
+  .artifact-lead, .artifact-note, .artifact-step { font-size: clamp(18px, 1.2vw, 23px); }
+
+  .stage-question-card { padding: clamp(30px, 3vw, 56px); }
+  .choice-question { max-width: 44ch; font-size: clamp(30px, 2.25vw, 46px); }
+  .single-choice-option { min-height: clamp(118px, 9vw, 174px); padding: clamp(22px, 1.8vw, 34px); font-size: clamp(19px, 1.3vw, 25px); }
+  .primary-action, .stage-confirm { min-height: clamp(64px, 4.8vw, 82px); font-size: clamp(20px, 1.5vw, 27px) !important; }
+
+  .caption-dock { min-height: 86px; padding: 16px clamp(28px, 3vw, 62px); }
+  .caption-short, .caption-synced { font-size: clamp(17px, 1.2vw, 22px); }
+  .teaching-stage .classroom-composer { padding: 18px clamp(28px, 3vw, 62px) 22px; }
+  .chat-compose input { min-height: 62px; font-size: clamp(18px, 1.2vw, 22px); }
+  .chat-compose button { width: clamp(98px, 7vw, 142px); min-height: 62px; font-size: clamp(17px, 1.1vw, 21px); }
+}
