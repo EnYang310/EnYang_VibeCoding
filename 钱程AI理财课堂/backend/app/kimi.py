@@ -161,13 +161,11 @@ class KimiClient:
         # useful than the local, courseware-grounded teacher fallback.  The old
         # 40s × 2 retry path left learners staring at a spinner for over a
         # minute when a provider response merely missed a formatting detail.
-        try:
-            configured_timeout = float(os.getenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "60"))
-        except ValueError:
-            configured_timeout = 60.0
-        # A full 6–8 beat teaching scene is not a short chat completion. Never
-        # cut it off at an arbitrary 18 seconds and substitute a stock lesson.
-        self.response_timeout_seconds = max(60.0, min(configured_timeout, 90.0))
+        # A full 6–8 beat teaching scene is not a short chat completion. This
+        # request owns one 90-second window; when httpx times out, its context
+        # closes the connection, so no late provider response can be parsed or
+        # appended after the learner has already seen the retry prompt.
+        self.response_timeout_seconds = 90.0
 
     def _key(self) -> str:
         return os.getenv("MOONSHOT_API_KEY", "").strip() or _shared_key()

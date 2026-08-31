@@ -131,10 +131,10 @@ async def test_completed_interaction_never_substitutes_a_generic_courseware_less
         )
 
 
-def test_teacher_model_timeout_never_drops_to_eighteen_seconds(monkeypatch):
+def test_teacher_model_timeout_is_fixed_at_ninety_seconds(monkeypatch):
     monkeypatch.setenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "18")
 
-    assert KimiClient().response_timeout_seconds >= 60
+    assert KimiClient().response_timeout_seconds == 90
 
 
 @pytest.mark.asyncio
