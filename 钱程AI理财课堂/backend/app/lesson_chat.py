@@ -8,6 +8,7 @@ from app.kimi import KimiClient
 from app.lesson_runtime import COURSE_FOCUS, UNIT_IDS, UNIT_TITLES
 from app.learning_gates import criteria_for
 from app.schemas import ChatRequest, ChatResponse, EvidenceNote, TeachingArtifact, TeachingScene
+from app.teaching_flow import append_course_finished_closing
 
 
 REAL_DECISION_TERMS = (
@@ -41,6 +42,13 @@ def sanitize_learner_work(items: list[str]) -> list[str]:
 def needs_compliance_redirect(message: str) -> bool:
     compact = "".join(message.split())
     return any(term in compact for term in REAL_DECISION_TERMS)
+
+
+def finish_free_question_mode(response: ChatResponse, *, course_finished: bool) -> ChatResponse:
+    if not course_finished:
+        return response
+    room_for_reply = 400 - len(append_course_finished_closing("")) - 1
+    return response.model_copy(update={"reply": append_course_finished_closing(response.reply[:room_for_reply])})
 
 
 def courseware_fallback(request: ChatRequest, *, privacy_redirect: bool = False) -> ChatResponse:
@@ -82,8 +90,8 @@ def courseware_fallback(request: ChatRequest, *, privacy_redirect: bool = False)
             subtitle_excerpt=primary.text[:140],
             full_caption=[
                 f"我们先不急着得出结论。{primary.text}",
-                f"把它放回生活里理解：{COURSE_FOCUS[request.course_id]}",
-                "你可以先用这个原则看清任务、日期和可能的变化，再决定还想继续追问什么。",
+                f"把它放回生活里理解。{COURSE_FOCUS[request.course_id]}",
+                "先用这个原则看清任务、日期和可能的变化。再决定还想继续追问什么。",
             ],
             teaching_artifacts=[
                 TeachingArtifact(kind="one_liner", appear_after_paragraph=0, title="先记这一句", lead=primary.text[:100]),
@@ -103,11 +111,11 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
     unit_title = UNIT_TITLES[UNIT_IDS.index(request.unit_id)]
     all_user_text = [request.message, *[turn.content for turn in request.history], *request.context.answer_summaries]
     if any(contains_sensitive_data(item) for item in all_user_text):
-        return courseware_fallback(request, privacy_redirect=True)
+        return finish_free_question_mode(courseware_fallback(request, privacy_redirect=True), course_finished=request.context.course_finished)
     if needs_compliance_redirect(request.message):
         # Real purchase, sale, allocation and product-selection questions never
         # reach the external model. The boundary is deterministic, not prompt-only.
-        return courseware_fallback(request)
+        return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
     offer_transition = request.message.startswith("我完成了这张互动卡")
     generated = await KimiClient().lesson_chat(
         course_title=course["title"],
@@ -123,16 +131,17 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         pending_review_units=request.context.pending_review_units,
         advancement_criteria=list(criteria_for(request.unit_id)),
         course_finished=request.context.course_finished,
+        free_chat_mode=request.context.free_chat_mode,
         offer_transition=offer_transition,
         compliance_redirect=False,
     )
     if generated is None:
-        return courseware_fallback(request)
+        return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
     by_id = {item.evidence_id: item for item in evidence}
     reply = generated.reply
     if generated.next_step_invitation and generated.next_step_invitation.strip() not in reply:
         reply = f"{reply.rstrip('。！？!?')}。{generated.next_step_invitation}"
-    return generated.model_copy(
+    response = generated.model_copy(
         update={
             "reply": reply[:400],
             "evidence_notes": [
@@ -142,3 +151,4 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
             ]
         }
     )
+    return finish_free_question_mode(response, course_finished=request.context.course_finished)

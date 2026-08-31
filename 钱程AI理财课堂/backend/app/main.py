@@ -17,6 +17,7 @@ from app.lesson_runtime import COURSE_FOCUS, get_lesson
 from app.rate_limit import SlidingWindowLimiter
 from app.request_lifecycle import ClientDisconnected, await_while_connected
 from app.schemas import ChatRequest, ChatResponse, InteractionCardRequest, InteractionCardResponse, InteractionTurnRequest, InteractionTurnResponse, VoiceSynthesisRequest, VoiceSynthesisResponse
+from app.teaching_flow import should_present_next_card
 from app.voice import TencentVoiceService, VoiceUnavailableError
 
 
@@ -115,10 +116,16 @@ async def lesson_chat(request: ChatRequest, http_request: Request) -> ChatRespon
         # A card appears when the learner has completed the current card and
         # the teaching gate is actually met.  It is not keyed off wording such
         # as “continue” or “next”.
+        gate_passed = passes_gate(request.unit_id, response.teaching_decision, response.observed_criteria)
         if (
-            request.context.current_card_completed
-            and request.context.next_unit_id == next_unit_after(request.unit_id)
-            and passes_gate(request.unit_id, response.teaching_decision, response.observed_criteria)
+            request.context.next_unit_id == next_unit_after(request.unit_id)
+            and should_present_next_card(
+                current_card_completed=request.context.current_card_completed,
+                course_finished=request.context.course_finished or request.context.free_chat_mode,
+                next_unit_id=request.context.next_unit_id,
+                assistant_replies_since_card=request.context.assistant_replies_since_card,
+                gate_passed=gate_passed,
+            )
         ):
             response = response.model_copy(update={
                 "tool_call": InteractionCardResponse(**present_interaction_card(request.course_id, request.context.next_unit_id))
@@ -167,7 +174,14 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
             await await_while_connected(http_request, personalized_lesson_chat(enriched)), unit_id=request.unit_id, learner_text=request.submitted_answer
         )
         tool_call = None
-        if passes_gate(request.unit_id, feedback.teaching_decision, feedback.observed_criteria):
+        gate_passed = passes_gate(request.unit_id, feedback.teaching_decision, feedback.observed_criteria)
+        if should_present_next_card(
+            current_card_completed=True,
+            course_finished=request.context.course_finished or request.context.free_chat_mode,
+            next_unit_id=request.next_unit_id,
+            assistant_replies_since_card=request.context.assistant_replies_since_card,
+            gate_passed=gate_passed,
+        ):
             tool_call = InteractionCardResponse(**present_interaction_card(request.course_id, request.next_unit_id))
         return InteractionTurnResponse(assistant_reply=feedback, tool_call=tool_call)
     except ValueError as exc:

@@ -1031,3 +1031,46 @@ $green: #2e6d5b;
   .restart-link { margin-top: 22px; font-size: 15px; }
   .compliance-note { margin: 17px 16px 0; font-size: 13px; line-height: 1.55; }
 }
+
+/* A learning product must be readable at arm's length.  These are deliberate
+   type scales, not a transform/zoom: card height, tap targets and line-height
+   grow with the text on both phone and desktop. */
+@media (max-width: 760px) {
+  .lesson-page { font-size: 20px; }
+  .lesson-page .wordmark { font-size: 27px; }
+  .lesson-page .lesson-position, .lesson-page .text-button { font-size: 16px; }
+  .lesson-page .eyebrow, .course-start-card .teacher-line, .teacher-line, .choice-label { font-size: 16px; }
+  .lesson-page .lesson-title { font-size: clamp(40px, 11.3vw, 47px); }
+  .course-start-title { font-size: 33px; }
+  .course-start-copy, .course-start-focus { font-size: 21px; line-height: 1.66; }
+  .scene-title { font-size: clamp(35px, 9.8vw, 42px); }
+  .scene-summary { font-size: 23px; line-height: 1.65; }
+  .voice-toggle { font-size: 16px; }
+  .artifact-label { font-size: 16px; }
+  .artifact-title { font-size: 30px; }
+  .artifact-lead, .artifact-note, .artifact-step, .artifact-plain-items, .timeline-artifact-row, .contrast-column { font-size: 21px; line-height: 1.62; }
+  .card-teacher-intro { font-size: 21px; line-height: 1.64; }
+  .choice-context { font-size: 20px; line-height: 1.62; }
+  .choice-question { font-size: clamp(31px, 8.8vw, 37px); line-height: 1.34; }
+  .single-choice-option { min-height: 84px; padding: 19px 17px; font-size: 22px; line-height: 1.45; }
+  .choice-index { font-size: 17px; }
+  .submission-hint { font-size: 18px; }
+  .primary-action, .stage-confirm { min-height: 72px; font-size: 24px !important; }
+  .caption-short, .caption-synced { font-size: 19px; line-height: 1.58; }
+  .caption-expand { font-size: 16px; }
+  .chat-compose input { min-height: 60px; font-size: 20px; }
+  .chat-compose button { width: 82px; min-height: 60px; font-size: 20px; }
+  .chat-tip { display: block; padding: 0 2px; font-size: 16px; line-height: 1.5; }
+}
+
+@media (min-width: 761px) {
+  .home-page .hero-copy, .home-page .home-principle { font-size: clamp(21px, 1.35vw, 27px); line-height: 1.7; }
+  .home-page .resume-meta, .home-page .course-subtitle { font-size: clamp(19px, 1.15vw, 24px); line-height: 1.62; }
+  .lesson-page .eyebrow, .course-start-card .teacher-line, .teacher-line, .choice-label { font-size: clamp(15px, 1vw, 19px); }
+  .course-start-title { font-size: clamp(32px, 2.4vw, 48px); }
+  .course-start-copy, .course-start-focus { font-size: clamp(21px, 1.35vw, 27px); line-height: 1.68; }
+  .card-teacher-intro { font-size: clamp(21px, 1.35vw, 27px); line-height: 1.66; }
+  .choice-context { font-size: clamp(19px, 1.2vw, 24px); line-height: 1.62; }
+  .submission-hint { font-size: clamp(17px, 1.1vw, 22px); }
+  .chat-tip { font-size: clamp(16px, 1vw, 20px); }
+}

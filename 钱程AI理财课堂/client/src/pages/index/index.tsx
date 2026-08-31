@@ -250,6 +250,7 @@ export default function Index() {
   const course = learning.activeCourseId ? COURSE_CONTENT[learning.activeCourseId] : null
   const progress = course ? learning.courses[course.id] : null
   const unit = course && progress ? course.units[progress.unitIndex] : null
+  const freeQuestionMode = Boolean(progress?.completed && progress.reviewingUnit === null) || courseChatCompleted
   // The classroom conversation belongs to the course, not to one page. The
   // current unit only tells the teacher which piece of courseware to use.
   const chatKey = course ? course.id : ''
@@ -296,6 +297,14 @@ export default function Index() {
 
   useEffect(() => {
     if (!course || !unit) return
+    // The action card has already closed the learning path. Returning to a
+    // completed course reopens its transcript as free Q&A, never as a fresh
+    // duplicate of the final choice card.
+    if (progress?.completed && progress.reviewingUnit === null) {
+      setPresentedCard(null)
+      setCardLoading(false)
+      return
+    }
     if (unit.id === 'opening') {
       const requestKey = `${course.id}:${progress?.unitIndex}`
       if (openingRequestRef.current === requestKey) return
@@ -339,7 +348,7 @@ export default function Index() {
       if (!cancelled && session.isCurrent(sessionToken) && result.statusCode < 400 && data.tool_name === 'present_interaction_card' && data.unit_id === unit.id) setPresentedCard(data as PresentedCard)
     }).catch(() => undefined).finally(() => { if (!cancelled && session.isCurrent(sessionToken)) setCardLoading(false) })
     return () => { cancelled = true }
-  }, [course?.id, unit?.id, progress?.unitIndex, presentedCard?.course_id, presentedCard?.unit_id])
+  }, [course?.id, unit?.id, progress?.unitIndex, progress?.completed, progress?.reviewingUnit, presentedCard?.course_id, presentedCard?.unit_id])
 
   const startCourse = (courseId: CourseId) => {
     closeVisibleLesson()
@@ -397,7 +406,9 @@ export default function Index() {
             current_card_answer: awaitingNext?.unitId === unit.id ? humanizeInteractionAnswer(awaitingNext.answer) : '',
             awaiting_next: awaitingNext?.unitId === unit.id,
             next_unit_id: awaitingNext?.unitId === unit.id ? awaitingNext.nextUnitId : '',
-            course_finished: courseChatCompleted
+            assistant_replies_since_card: awaitingNext?.unitId === unit.id ? messagesFor(unit.id).filter(item => item.role === 'assistant' && !item.pending).length : 0,
+            course_finished: false,
+            free_chat_mode: freeQuestionMode
           }
       }, session)
       const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }
@@ -419,12 +430,11 @@ export default function Index() {
   }
 
   const messagesFor = (unitId: string) => chat.filter(item => item.unitId === unitId)
-  const assistantTurns = messagesFor(unit?.id || '').filter(item => item.role === 'assistant' && item.evidenceIds && item.evidenceIds.length > 0).length
   const isTeacherUnit = false
   const canContinue = Boolean(unit && presentedCard?.unit_id === unit.id) && isInteractionComplete(unit!, answer)
 
   const continueLesson = async () => {
-    if (!course || !unit || !canContinue || submittingInteraction || courseChatCompleted) return
+    if (!course || !unit || !canContinue || submittingInteraction || freeQuestionMode) return
     const session = lessonSessionRef.current
     const sessionToken = session.token()
     const submitted = answer
@@ -444,7 +454,9 @@ export default function Index() {
             pending_review_units: progress!.reviewUnits,
             current_card_completed: true,
             current_card_answer: humanizeInteractionAnswer(submitted),
-            course_finished: true
+            assistant_replies_since_card: messagesFor(unit.id).filter(item => item.role === 'assistant' && !item.pending).length,
+            course_finished: true,
+            free_chat_mode: false
           }
         }, session)
         const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }
@@ -453,6 +465,7 @@ export default function Index() {
         setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.reply!, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source || 'local_fallback', teachingScene: data.teaching_scene }] }))
         persist(advanceCourse(learning, course.id, { answer: submitted }))
         setAnswer('')
+        setPresentedCard(null)
         setCourseChatCompleted(true)
       } catch {
         if (session.isCurrent(sessionToken)) Taro.showToast({ title: '老师暂时没收到行动卡，请重试', icon: 'none' })
@@ -473,7 +486,10 @@ export default function Index() {
             answer_summaries: Object.entries(progress!.answers).map(([index, text]) => `回合 ${Number(index) + 1}：${humanizeInteractionAnswer(text).slice(0, 300)}`),
             pending_review_units: progress!.reviewUnits,
             current_card_completed: true,
-            current_card_answer: humanizeInteractionAnswer(submitted)
+            current_card_answer: humanizeInteractionAnswer(submitted),
+            assistant_replies_since_card: messagesFor(unit.id).filter(item => item.role === 'assistant' && !item.pending).length,
+            course_finished: false,
+            free_chat_mode: false
           }
       }, session)
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
@@ -531,8 +547,6 @@ export default function Index() {
   const cards = course ? (cardTimeline[course.id] || []) : []
 
   if (!course || !progress || !unit) return <Home learning={learning} onStart={startCourse} />
-  if (progress.completed && progress.reviewingUnit === null && !courseChatCompleted) return <Completion courseId={course.id} learning={learning} onHome={goHome} onReview={index => persist(openReviewUnit(learning, course.id, index))} onRestart={restart} />
-
   return <View className='page lesson-page' style={{ '--course-accent': course.color } as React.CSSProperties}>
     <View className='topbar'>
       <Text className='wordmark' onClick={goHome}>钱程</Text>
@@ -558,7 +572,7 @@ export default function Index() {
             <Text className='teacher-line'>程老师 · 轮到你想一想</Text><Text className='card-teacher-intro'>{card.teacher_intro}</Text>
             <InteractionPanel key={`${course.id}-${progress.unitIndex}-${progress.reviewingUnit ?? 'main'}`} unit={cardUnit} value={answer} accent={course.color} onChange={setAnswer} />
             <Text className={`submission-hint ${canContinue ? 'ready' : ''}`}>{completionHint(cardUnit, answer)}</Text>
-            <Button className='primary-action stage-confirm' disabled={!canContinue || submittingInteraction || courseChatCompleted} onClick={continueLesson}>{submittingInteraction ? '程老师正在准备讲解…' : '确认作答，听程老师讲解'}</Button>
+            <Button className='primary-action stage-confirm' disabled={!canContinue || submittingInteraction || freeQuestionMode} onClick={continueLesson}>{submittingInteraction ? '程老师正在准备讲解…' : '确认作答，听程老师讲解'}</Button>
           </View> : <HistoricChoiceCard unit={cardUnit} answer={progress.answers[course.units.indexOf(cardUnit)]} />}
           <LessonMessages messages={messagesFor(card.unit_id)} voice={lectureVoice} />
         </View>
@@ -572,7 +586,7 @@ export default function Index() {
       </View>
       <View className='classroom-composer'>
         <View className='chat-compose'><Input value={chatDraft} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder='随时问程老师：解释、反驳、举例都可以…' /><Button disabled={sending || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
-        <Text className='chat-tip'>自由提问不会跳过学习环节；想继续时，只要自然表达你的意图。</Text>
+        <Text className='chat-tip'>{freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
       </View>
     </View>
     {captionExpanded && <View className='caption-sheet'><View className='caption-sheet-inner'><Text className='caption-sheet-label'>本课讲解全文 · 已累计 {lectureScenes.length} 段</Text>{(lectureScenes.length > 0 ? lectureScenes : [scene]).map((lecture, sceneIndex) => <View key={`${lecture.screen_title}-${sceneIndex}`} className='caption-lesson'><Text className='caption-sheet-title'>{lecture.screen_title}</Text>{lecture.full_caption.map((paragraph, index) => <Text className='caption-paragraph' key={`${paragraph}-${index}`}>{paragraph}</Text>)}</View>)}<Button className='secondary-action caption-close' onClick={() => setCaptionExpanded(false)}>返回继续听</Button></View></View>}

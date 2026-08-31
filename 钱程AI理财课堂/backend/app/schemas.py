@@ -15,7 +15,11 @@ class LearningContext(BaseModel):
     current_card_answer: str = Field(default="", max_length=2400)
     awaiting_next: bool = False
     next_unit_id: str = Field(default="", max_length=48)
+    # Replies already delivered after the learner answered the current card.
+    # The server adds the reply for this request before enforcing the cap.
+    assistant_replies_since_card: int = Field(default=0, ge=0, le=3)
     course_finished: bool = False
+    free_chat_mode: bool = False
 
 
 class ChatRequest(BaseModel):

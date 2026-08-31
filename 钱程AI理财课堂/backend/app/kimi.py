@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.schemas import ChatResponse, TeachingScene
+from app.teaching_flow import has_dense_artifact_cadence, has_short_caption_beats
 
 
 PROHIBITED_REPLY_PATTERNS = (
@@ -51,6 +52,12 @@ def _safe_chat_generated(payload: dict[str, Any], *, allowed_evidence_ids: set[s
         decision = str(payload.get("teaching_decision") or "probe").strip()
         if decision not in {"advance", "probe", "repair"}:
             decision = "probe"
+        teaching_scene = TeachingScene(**payload["teaching_scene"]) if payload.get("teaching_scene") else None
+        if teaching_scene is None or not has_short_caption_beats(teaching_scene.full_caption) or not has_dense_artifact_cadence(
+                paragraph_count=len(teaching_scene.full_caption),
+                appear_after_paragraphs=[item.appear_after_paragraph for item in teaching_scene.teaching_artifacts],
+            ):
+            return None
         candidate = ChatResponse(
             reply=str(payload["reply"]).strip(),
             evidence_ids=evidence_ids,
@@ -61,7 +68,7 @@ def _safe_chat_generated(payload: dict[str, Any], *, allowed_evidence_ids: set[s
             observed_criteria=[str(item).strip()[:120] for item in payload.get("observed_criteria", []) if str(item).strip()][:4],
             missing_criterion=(str(payload["missing_criterion"]).strip()[:160] if payload.get("missing_criterion") else None),
             next_step_invitation=(str(payload["next_step_invitation"]).strip()[:160] if payload.get("next_step_invitation") else None),
-            teaching_scene=TeachingScene(**payload["teaching_scene"]) if payload.get("teaching_scene") else None,
+            teaching_scene=teaching_scene,
             compliance_mode="education_only",
             source="kimi",
         )
@@ -115,6 +122,7 @@ class KimiClient:
         pending_review_units: list[int],
         advancement_criteria: list[str],
         course_finished: bool,
+        free_chat_mode: bool,
         offer_transition: bool,
         compliance_redirect: bool,
     ) -> ChatResponse | None:
@@ -137,12 +145,13 @@ class KimiClient:
             "pending_review_units": pending_review_units,
             "advancement_criteria": advancement_criteria,
             "course_finished": course_finished,
+            "free_chat_mode": free_chat_mode,
             "current_card_completed": offer_transition,
             "latest_message": message,
             "compliance_redirect": compliance_redirect,
             "rules": [
                 "只能使用 allowed_courseware 中的知识；不知道就明确说本课课件没有覆盖。",
-                "reply 用一句自然回应即可；完整授课放入 teaching_scene。teaching_scene 的 screen_title 不超过 16 字，screen_summary 是一句白话结论，full_caption 必须是 3 到 5 段完整讲解、每段 45 到 110 个中文字符。讲解要先解释题目中的因果，再举生活例子，最后自然收束；不要堆术语。teaching_artifacts 是 0 到 4 个随讲解出现的视觉教学组件：只在确实能让当前知识更好懂时才生成，绝不能为凑数重复内容。kind 只能是 one_liner（一句话看懂）、steps（因果或判断步骤）、timeline（先后顺序）、contrast（两个容易混淆的概念对照）、scenario（生活情境拆解）、checklist（核验清单）、quote（值得记住的结论）、warning（容易踩坑的提醒）。每个组件有 appear_after_paragraph（0 代表第一段朗读结束后出现，依此类推）、title、lead、items（0 到 4 条）、note。根据知识选择不同 kind，不要每次都用同一个模板；没有合适组件就返回空数组。",
+                "reply 用一句自然回应即可；完整授课放入 teaching_scene。teaching_scene 的 screen_title 不超过 16 字，screen_summary 是一句白话结论，full_caption 必须是 3 到 5 段完整讲解；每段严格控制为 2 到 3 句、45 到 110 个中文字符。讲解要先解释题目中的因果，再举生活例子，最后自然收束；不要堆术语。teaching_artifacts 是随讲解出现的视觉教学组件，必须高频：有 N 段 full_caption 就生成 N-1 个组件，并让 appear_after_paragraph 精确覆盖 0、1、…、N-2；即每讲完 2 到 3 句话马上出现一个能帮助理解当前知识的组件。不能返回空数组。kind 只能是 one_liner（一句话看懂）、steps（因果或判断步骤）、timeline（先后顺序）、contrast（两个容易混淆的概念对照）、scenario（生活情境拆解）、checklist（核验清单）、quote（值得记住的结论）、warning（容易踩坑的提醒）。根据当前知识选择合适 kind，并尽量让相邻组件不同；不要为凑数重复内容。每个组件有 appear_after_paragraph、title、lead、items（0 到 4 条）、note。",
                 "如果 current_card_completed 为 true：不要逐字复述选项，不要做泛泛表扬；围绕用户答案解释当前知识点，并根据 advancement_criteria 决定是否已具备进入下一道生活情境题的基础。够了就 teaching_decision=advance，系统会自然呈现下一道题；不够就 teaching_decision=probe 或 repair，用一个有针对性的追问或生活例子继续带向缺口。绝不能让用户通过说“继续、下一步”来触发题目，也绝不能对用户说“卡片、下一张卡、发卡”等内部实现词。",
                 "不推荐真实金融产品，不给买卖指令、仓位、配置比例、收益预测或承诺。",
                 "若 compliance_redirect 为 true，明确说明不能替用户做真实投资决定，然后提供通用核验框架。",
@@ -151,7 +160,8 @@ class KimiClient:
                 "observed_criteria 必须逐字使用已满足的 advancement_criteria；missing_criterion 只能填写当前最小缺口。",
                 "只输出 JSON：reply、evidence_ids、learning_signals、suggested_optional_card、teaching_decision、observed_criteria、missing_criterion、next_step_invitation、teaching_scene。",
                 "next_step_invitation 只在仍需用户补充理解时使用；已达到 advance 时应为 null，不要要求用户说任何触发词。",
-                "如果 course_finished 为 true，先用自然语言说明本课知识点已讲完，邀请用户继续问任何概念或生活情境；此后是自由聊天，不再邀请下一张卡。",
+                "如果 course_finished 为 true，先讲解用户刚完成选择的理由及一个延伸知识点，再明确说“这一课的知识点已经讲完了。之后有任何问题，随时问我。”；此后是自由聊天，不再邀请下一张卡。",
+                "如果 free_chat_mode 为 true，课程已经收束：直接回答用户当前问题并继续用教学组件帮助理解，但不要重复课程结束语，也绝不再邀请或呈现新的互动卡。",
                 "evidence_ids 至少一个且只能从 allowed_courseware 的 evidence_id 选择。",
             ],
         }
