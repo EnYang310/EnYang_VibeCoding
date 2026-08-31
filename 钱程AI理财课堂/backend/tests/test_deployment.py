@@ -13,7 +13,7 @@ def test_deployment_keeps_secret_server_side_and_builds_the_taro_client():
     assert "npm run build:h5" in dockerfile
     assert "FROM python:3.12" in dockerfile
     assert "WORKDIR /app/backend" in dockerfile
-    assert "USER appuser" in dockerfile
+    assert "PORT=80 exec python -m app.server" in dockerfile
     assert "MOONSHOT_API_KEY" not in dockerfile
     assert 'forwarded_allow_ips="*"' not in (ROOT / "backend" / "app" / "server.py").read_text(encoding="utf-8")
 
@@ -33,10 +33,8 @@ def test_h5_has_a_source_entrypoint_and_docker_copies_the_build():
     assert "COPY --from=web /web/dist/h5 ./frontend" in (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
 
-def test_git_deploy_probe_is_compatible_with_cloudbase_port_80():
+def test_git_deploy_forces_the_port_used_by_cloudbase_versions():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    entrypoint = (ROOT / "docker-entrypoint.sh").read_text(encoding="utf-8")
 
-    assert "EXPOSE 80 8000" in dockerfile
-    assert "socat TCP-LISTEN:80" in entrypoint
-    assert "appuser" in entrypoint
+    assert "EXPOSE 80" in dockerfile
+    assert 'CMD ["sh", "-c", "PORT=80 exec python -m app.server"]' in dockerfile
