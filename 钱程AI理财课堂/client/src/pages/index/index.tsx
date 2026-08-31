@@ -9,7 +9,7 @@ import { shouldRevealDeferredInteractionCard, type DeferredInteractionCard } fro
 import { answerReceivedMessage, answerRequestFailedMessage } from '../../teacher-turn-feedback'
 import { shouldSettleVoiceScene } from '../../voice-settlement'
 import { InteractionPanel } from './interaction-panel'
-import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
+import { completionHint, humanizeInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
 import './index.scss'
 
 const STORAGE_KEY = 'qiancheng-learning-v1'
@@ -666,11 +666,13 @@ function CourseStartCard({ course }: { course: typeof COURSE_CONTENT[CourseId] }
 }
 
 function HistoricChoiceCard({ unit, answer }: { unit: CourseUnit, answer?: string }) {
+  const review = reviewedChoice(unit, answer || '')
   return <View className='stage-question-card timeline-card completed-card'>
     <Text className='teacher-line'>程老师 · 互动练习</Text>
     <Text className='historic-question-title'>{unit.title}</Text>
     <Text className='historic-question'>{unit.prompt}</Text>
-    <View className='historic-choice'><Text>{answer ? humanizeInteractionAnswer(answer) : '本题暂时跳过'}</Text></View>
+    <View className='historic-choice'><Text>{review.yourChoice}</Text></View>
+    {review.correctAnswer && <View className='historic-choice historic-correct-answer'><Text>{review.correctAnswer}</Text></View>}
   </View>
 }
 

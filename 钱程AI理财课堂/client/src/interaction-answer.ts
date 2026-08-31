@@ -34,6 +34,14 @@ export function humanizeInteractionAnswer(value: string): string {
     const parsed = JSON.parse(value) as Partial<AnswerEnvelope>
     if (parsed.v !== 1 || !parsed.data || typeof parsed.data !== 'object') return value
     const choice = typeof parsed.data.choice === 'string' ? parsed.data.choice.trim() : ''
-    return choice ? `选择：${choice}` : value
+    return choice ? `你的选择：${choice}` : value
   } catch { return value }
+}
+
+export function reviewedChoice(unit: CourseUnit, value: string): { yourChoice: string; correctAnswer: string } {
+  const choice = selectedChoice(unit, value)
+  return {
+    yourChoice: choice ? `你的选择：${choice}` : '本题暂时跳过',
+    correctAnswer: unit.correctOption ? `正确答案：${unit.correctOption}` : '',
+  }
 }

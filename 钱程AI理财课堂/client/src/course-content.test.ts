@@ -9,6 +9,9 @@ describe('six lesson content contract', () => {
       expect(new Set(course.units.map(unit => unit.id)).size).toBe(8)
       expect(course.units.slice(1).every(unit => unit.interaction === 'single-choice')).toBe(true)
       expect(course.units.slice(1).every(unit => unit.questionContext && unit.options?.length === 3 && unit.correctOption)).toBe(true)
+      course.units.slice(1).forEach(unit => {
+        expect(unit.options?.filter(option => option === unit.correctOption)).toHaveLength(1)
+      })
     }
   })
 
