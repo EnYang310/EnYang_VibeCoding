@@ -37,7 +37,8 @@ describe('interaction completion contracts', () => {
 
   it('reveals the answer review as soon as a valid option is selected', () => {
     const unit = COURSE_CONTENT['money-jobs'].units[1]
-    expect(shouldRevealChoiceReview(unit, '')).toBe(false)
-    expect(shouldRevealChoiceReview(unit, encodeInteractionAnswer('single-choice', { choice: unit.options?.[1] }))).toBe(true)
+    const answer = encodeInteractionAnswer('single-choice', { choice: unit.options?.[1] })
+    expect(shouldRevealChoiceReview(unit, answer, false)).toBe(false)
+    expect(shouldRevealChoiceReview(unit, answer, true)).toBe(true)
   })
 })

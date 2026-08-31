@@ -3,9 +3,9 @@ import { Text, View } from '@tarojs/components'
 import type { CourseUnit } from '../../course-content'
 import { decodeInteractionAnswer, encodeInteractionAnswer, reviewedChoice, shouldRevealChoiceReview } from '../../interaction-answer'
 
-type Props = { unit: CourseUnit; value: string; accent: string; onChange: (value: string) => void }
+type Props = { unit: CourseUnit; value: string; accent: string; confirmed?: boolean; onChange: (value: string) => void }
 
-export function InteractionPanel({ unit, value, accent, onChange }: Props) {
+export function InteractionPanel({ unit, value, accent, confirmed = false, onChange }: Props) {
   const selected = useMemo(() => {
     const data = decodeInteractionAnswer(value, unit.interaction)
     return typeof data.choice === 'string' ? data.choice : ''
@@ -21,13 +21,13 @@ export function InteractionPanel({ unit, value, accent, onChange }: Props) {
         key={option}
         className={`single-choice-option ${selected === option ? 'selected' : ''}`}
         style={{ '--course-accent': accent } as React.CSSProperties}
-        onClick={() => onChange(encodeInteractionAnswer('single-choice', { choice: option }))}
+        onClick={() => { if (!confirmed) onChange(encodeInteractionAnswer('single-choice', { choice: option })) }}
       >
         <Text className='choice-index'>{String.fromCharCode(65 + index)}</Text>
         <Text className='choice-copy'>{option}</Text>
       </View>)}
     </View>
-    {shouldRevealChoiceReview(unit, value) && <View className='immediate-choice-review'>
+    {shouldRevealChoiceReview(unit, value, confirmed) && <View className='immediate-choice-review'>
       <Text>{choiceReview.yourChoice}</Text>
       <Text className='immediate-correct-answer'>{choiceReview.correctAnswer}</Text>
     </View>}

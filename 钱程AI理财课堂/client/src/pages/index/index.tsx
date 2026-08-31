@@ -10,6 +10,7 @@ import { answerReceivedMessage, answerRequestFailedMessage } from '../../teacher
 import { shouldSettleVoiceScene } from '../../voice-settlement'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
+import { clearPendingCardAdvance, hydratePendingCardAdvances, pendingCardAdvanceForCourse, savePendingCardAdvance, type PendingCardAdvance, type PendingCardAdvances } from '../../pending-card-advance'
 import './index.scss'
 
 const STORAGE_KEY = 'qiancheng-learning-v1'
@@ -37,7 +38,7 @@ type ChatMessage = {
 }
 type ChatMap = Record<string, ChatMessage[]>
 type PresentedCard = { tool_name: 'present_interaction_card', status: 'presented', course_id: string, unit_id: string, teacher_intro: string, unit_title: string }
-type AwaitingNext = { unitId: string, nextUnitId: string, answer: string }
+type AwaitingNext = PendingCardAdvance
 
 const sceneVoiceId = (unitId: string, scene: TeachingScene) => `scene-${unitId}-${scene.screen_title}-${scene.full_caption.join('').slice(0, 24)}`
 
@@ -236,11 +237,11 @@ const readState = (): LearningState => {
   try { return readLearningHomeState(Taro.getStorageSync(STORAGE_KEY)) } catch { return createLearningState() }
 }
 
-const readClassroom = (): { chatByUnit: ChatMap, cardTimeline: Record<string, PresentedCard[]> } => {
+const readClassroom = (): { chatByUnit: ChatMap, cardTimeline: Record<string, PresentedCard[]>, pendingCardAdvances: PendingCardAdvances } => {
   try {
-    const stored = Taro.getStorageSync(CLASSROOM_STORAGE_KEY) as Partial<{ chatByUnit: ChatMap, cardTimeline: Record<string, PresentedCard[]> }>
-    return { chatByUnit: stored?.chatByUnit || {}, cardTimeline: stored?.cardTimeline || {} }
-  } catch { return { chatByUnit: {}, cardTimeline: {} } }
+    const stored = Taro.getStorageSync(CLASSROOM_STORAGE_KEY) as Partial<{ chatByUnit: ChatMap, cardTimeline: Record<string, PresentedCard[]>, pendingCardAdvances: unknown }>
+    return { chatByUnit: stored?.chatByUnit || {}, cardTimeline: stored?.cardTimeline || {}, pendingCardAdvances: hydratePendingCardAdvances(stored?.pendingCardAdvances) }
+  } catch { return { chatByUnit: {}, cardTimeline: {}, pendingCardAdvances: {} } }
 }
 
 const hasStarted = (state: LearningState, courseId: CourseId) => {
@@ -259,7 +260,7 @@ export default function Index() {
   const [presentedCard, setPresentedCard] = useState<PresentedCard | null>(null)
   const [deferredCard, setDeferredCard] = useState<DeferredInteractionCard<PresentedCard> | null>(null)
   const [cardLoading, setCardLoading] = useState(false)
-  const [awaitingNext, setAwaitingNext] = useState<AwaitingNext | null>(null)
+  const [pendingCardAdvances, setPendingCardAdvances] = useState<PendingCardAdvances>(initialClassroom.pendingCardAdvances)
   const [courseChatCompleted, setCourseChatCompleted] = useState(false)
   const [captionExpanded, setCaptionExpanded] = useState(false)
   const [cardTimeline, setCardTimeline] = useState<Record<string, PresentedCard[]>>(initialClassroom.cardTimeline)
@@ -271,6 +272,13 @@ export default function Index() {
   const course = learning.activeCourseId ? COURSE_CONTENT[learning.activeCourseId] : null
   const progress = course ? learning.courses[course.id] : null
   const unit = course && progress ? course.units[progress.unitIndex] : null
+  const awaitingNext = course ? pendingCardAdvanceForCourse(pendingCardAdvances, course.id) : undefined
+  const setAwaitingNext = useCallback((next: AwaitingNext | null) => {
+    if (!course) return
+    setPendingCardAdvances(current => next
+      ? savePendingCardAdvance(current, course.id, next)
+      : clearPendingCardAdvance(current, course.id))
+  }, [course?.id])
   const freeQuestionMode = Boolean(progress?.completed && progress.reviewingUnit === null) || courseChatCompleted
   // The classroom conversation belongs to the course, not to one page. The
   // current unit only tells the teacher which piece of courseware to use.
@@ -289,8 +297,8 @@ export default function Index() {
   }, [course?.id, presentedCard?.course_id, presentedCard?.unit_id])
 
   useEffect(() => {
-    try { Taro.setStorageSync(CLASSROOM_STORAGE_KEY, { chatByUnit, cardTimeline }) } catch { /* optional classroom history */ }
-  }, [chatByUnit, cardTimeline])
+    try { Taro.setStorageSync(CLASSROOM_STORAGE_KEY, { chatByUnit, cardTimeline, pendingCardAdvances }) } catch { /* optional classroom history */ }
+  }, [chatByUnit, cardTimeline, pendingCardAdvances])
 
   const persist = (next: LearningState) => {
     setLearning(next)
@@ -306,7 +314,6 @@ export default function Index() {
     setSending(false)
     setSubmittingInteraction(false)
     setCardLoading(false)
-    setAwaitingNext(null)
     setPresentedCard(null)
     setDeferredCard(null)
     setCaptionExpanded(false)
@@ -315,8 +322,8 @@ export default function Index() {
   }, [lectureVoice.stop])
 
   useEffect(() => {
-    if (course && progress) setAnswer(progress.answers[progress.unitIndex] || (progress.unitIndex === 7 ? progress.actionCard : ''))
-  }, [course?.id, progress?.unitIndex, progress?.reviewingUnit])
+    if (course && progress) setAnswer(awaitingNext && awaitingNext.unitId === unit?.id ? awaitingNext.answer : (progress.answers[progress.unitIndex] || (progress.unitIndex === 7 ? progress.actionCard : '')))
+  }, [course?.id, progress?.unitIndex, progress?.reviewingUnit, unit?.id, awaitingNext?.unitId, awaitingNext?.answer])
 
   useEffect(() => {
     if (!course || !unit) return
@@ -402,6 +409,7 @@ export default function Index() {
         if (result.confirm) {
           closeVisibleLesson()
           persist(restartCourse(learning, course.id))
+          setPendingCardAdvances(current => clearPendingCardAdvance(current, course.id))
           setChatByUnit(current => ({ ...current, [course.id]: [] }))
           setCardTimeline(current => ({ ...current, [course.id]: [] }))
           setAnswer('')
@@ -470,7 +478,8 @@ export default function Index() {
 
   const messagesFor = (unitId: string) => chat.filter(item => item.unitId === unitId)
   const isTeacherUnit = false
-  const canContinue = Boolean(unit && presentedCard?.unit_id === unit.id) && isInteractionComplete(unit!, answer)
+  const answerConfirmed = awaitingNext?.unitId === unit?.id
+  const canContinue = Boolean(unit && presentedCard?.unit_id === unit.id) && isInteractionComplete(unit!, answer) && !answerConfirmed
 
   const continueLesson = async () => {
     if (!course || !unit || !canContinue || submittingInteraction || freeQuestionMode) return
@@ -479,6 +488,7 @@ export default function Index() {
     const submitted = answer
     const nextUnit = course.units[progress!.unitIndex + 1]
     const turnId = ++turnSequenceRef.current
+    if (nextUnit) setAwaitingNext({ unitId: unit.id, nextUnitId: nextUnit.id, answer: submitted })
     autoReadNextSceneRef.current = true
     lectureVoice.stop()
     // Do not make a learner stare at a button while a long teacher turn is
@@ -558,7 +568,6 @@ export default function Index() {
       } else {
         // The learner can freely chat here. The next question will appear only
         // after the teaching gate judges the current idea to be solid enough.
-        setAwaitingNext({ unitId: unit.id, nextUnitId: nextUnit.id, answer: submitted })
       }
     } catch {
       if (turnId === turnSequenceRef.current && session.isCurrent(sessionToken)) {
@@ -573,6 +582,7 @@ export default function Index() {
   const skip = () => {
     if (!course || !unit) return
     persist(skipCourseUnit(learning, course.id))
+    setPendingCardAdvances(current => clearPendingCardAdvance(current, course.id))
     setAnswer('')
   }
 
@@ -627,7 +637,7 @@ export default function Index() {
         return <View key={card.unit_id} className='timeline-turn'>
           {active ? <View id={activeCardId} className='stage-question-card timeline-card'>
             <Text className='teacher-line'>程老师 · 轮到你想一想</Text><Text className='card-teacher-intro'>{card.teacher_intro}</Text>
-            <InteractionPanel key={`${course.id}-${progress.unitIndex}-${progress.reviewingUnit ?? 'main'}`} unit={cardUnit} value={answer} accent={course.color} onChange={setAnswer} />
+            <InteractionPanel key={`${course.id}-${progress.unitIndex}-${progress.reviewingUnit ?? 'main'}`} unit={cardUnit} value={answer} accent={course.color} confirmed={answerConfirmed} onChange={setAnswer} />
             <Text className={`submission-hint ${canContinue ? 'ready' : ''}`}>{completionHint(cardUnit, answer)}</Text>
             <Button className='primary-action stage-confirm' disabled={!canContinue || submittingInteraction || freeQuestionMode} onClick={continueLesson}>{submittingInteraction ? '程老师正在准备讲解…' : '确认作答，听程老师讲解'}</Button>
           </View> : <HistoricChoiceCard unit={cardUnit} answer={progress.answers[course.units.indexOf(cardUnit)]} />}
