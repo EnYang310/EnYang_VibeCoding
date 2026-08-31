@@ -17,17 +17,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY backend/requirements.txt ./backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends socat \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir -r backend/requirements.txt
 COPY backend ./backend
 COPY --from=web /web/dist/h5 ./frontend
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 # The service only needs read access to its packaged files. Running it as an
 # unprivileged account limits the impact of an application-level compromise.
 RUN useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app
-USER appuser
+    && chown -R appuser:appuser /app/backend /app/frontend \
+    && chmod 755 /app/docker-entrypoint.sh
 
 WORKDIR /app/backend
-EXPOSE 8000
+EXPOSE 80 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
-CMD ["python", "-m", "app.server"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
