@@ -15,6 +15,7 @@ from app.learning_gates import infer_observed_criteria, passes_gate
 from app.lesson_chat import personalized_lesson_chat
 from app.lesson_runtime import COURSE_FOCUS, get_lesson
 from app.rate_limit import SlidingWindowLimiter
+from app.request_lifecycle import ClientDisconnected, await_while_connected
 from app.schemas import ChatRequest, ChatResponse, InteractionCardRequest, InteractionCardResponse, InteractionTurnRequest, InteractionTurnResponse, VoiceSynthesisRequest, VoiceSynthesisResponse
 from app.voice import TencentVoiceService, VoiceUnavailableError
 
@@ -106,10 +107,10 @@ async def course_detail(course_id: str) -> dict:
 
 
 @app.post("/api/v1/lessons/chat", response_model=ChatResponse)
-async def lesson_chat(request: ChatRequest) -> ChatResponse:
+async def lesson_chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     try:
         response = gate_checked_response(
-            await personalized_lesson_chat(request), unit_id=request.unit_id, learner_text=request.message
+            await await_while_connected(http_request, personalized_lesson_chat(request)), unit_id=request.unit_id, learner_text=request.message
         )
         # A card appears when the learner has completed the current card and
         # the teaching gate is actually met.  It is not keyed off wording such
@@ -125,6 +126,8 @@ async def lesson_chat(request: ChatRequest) -> ChatResponse:
         return response
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="课程或回合不存在") from exc
+    except ClientDisconnected as exc:
+        raise HTTPException(status_code=499, detail="课程已离开，已取消本次讲解") from exc
 
 
 @app.post("/api/v1/lessons/interaction-card", response_model=InteractionCardResponse)
@@ -140,7 +143,7 @@ async def interaction_card(request: InteractionCardRequest) -> InteractionCardRe
 
 
 @app.post("/api/v1/lessons/interaction-turn", response_model=InteractionTurnResponse)
-async def interaction_turn(request: InteractionTurnRequest) -> InteractionTurnResponse:
+async def interaction_turn(request: InteractionTurnRequest, http_request: Request) -> InteractionTurnResponse:
     if request.course_id not in COURSE_FOCUS:
         raise HTTPException(status_code=422, detail="课程或回合不存在")
     try:
@@ -161,7 +164,7 @@ async def interaction_turn(request: InteractionTurnRequest) -> InteractionTurnRe
             }
         )
         feedback = gate_checked_response(
-            await personalized_lesson_chat(enriched), unit_id=request.unit_id, learner_text=request.submitted_answer
+            await await_while_connected(http_request, personalized_lesson_chat(enriched)), unit_id=request.unit_id, learner_text=request.submitted_answer
         )
         tool_call = None
         if passes_gate(request.unit_id, feedback.teaching_decision, feedback.observed_criteria):
@@ -169,19 +172,26 @@ async def interaction_turn(request: InteractionTurnRequest) -> InteractionTurnRe
         return InteractionTurnResponse(assistant_reply=feedback, tool_call=tool_call)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="课程或回合不存在") from exc
+    except ClientDisconnected as exc:
+        raise HTTPException(status_code=499, detail="课程已离开，已取消本次讲解") from exc
 
 
 @app.post("/api/v1/voice/synthesize", response_model=VoiceSynthesisResponse)
-async def synthesize_voice(request: VoiceSynthesisRequest) -> VoiceSynthesisResponse:
+async def synthesize_voice(request: VoiceSynthesisRequest, http_request: Request) -> VoiceSynthesisResponse:
     try:
         # Tencent's SDK is synchronous.  Running it in the event loop made one
         # long narration block every chat/card request behind it.  Keep the
         # API async so a first-paragraph request can start playing while the
         # client fetches the remaining paragraphs in parallel.
-        segments = await asyncio.to_thread(voice_service.synthesize_paragraphs, request.paragraphs)
+        segments = await await_while_connected(
+            http_request,
+            asyncio.to_thread(voice_service.synthesize_paragraphs, request.paragraphs),
+        )
         return VoiceSynthesisResponse(segments=segments)
     except VoiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ClientDisconnected as exc:
+        raise HTTPException(status_code=499, detail="课程已离开，已取消本次朗读") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="朗读音频暂时生成失败") from exc
 

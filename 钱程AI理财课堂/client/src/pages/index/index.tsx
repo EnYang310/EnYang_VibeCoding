@@ -4,6 +4,7 @@ import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
 import { COURSE_CONTENT, COURSE_LIST, type CourseUnit } from '../../course-content'
 import { UNIT_IDS, advanceCourse, createLearningState, leaveCourse, openReviewUnit, restartCourse, selectCourse, skipCourseUnit, type CourseId, type LearningState } from '../../course-engine'
 import { readLearningHomeState } from '../../learning-storage'
+import { createLessonSession, type LessonSession } from '../../lesson-session'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
 import './index.scss'
@@ -47,20 +48,23 @@ const isWeapp = process.env.TARO_ENV === 'weapp'
 // H5 keeps same-origin HTTP requests. The mini program uses CloudBase's
 // private WeChat-to-container channel, which is why no request-domain entry
 // is needed in the WeChat public platform console.
-async function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown): Promise<ApiResult<T>> {
+function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown, session?: LessonSession): Promise<ApiResult<T>> {
   if (isWeapp) {
     const cloud = (globalThis as typeof globalThis & { wx?: { cloud?: { callContainer: (options: Record<string, unknown>) => Promise<{ data: T }> } } }).wx?.cloud
     if (!cloud) throw new Error('请在微信开发者工具中启用云开发环境')
-    const result = await cloud.callContainer({
+    const request = cloud.callContainer({
       config: { env: CLOUDBASE_ENV_ID },
       path,
       method,
       data,
       header: { 'X-WX-SERVICE': CLOUDBASE_SERVICE, 'content-type': 'application/json' }
     })
-    return { data: result.data, statusCode: 200 }
+    session?.track(request)
+    return request.then(result => ({ data: result.data, statusCode: 200 }))
   }
-  return Taro.request<T>({ url: `${API_BASE}${path}`, method, data })
+  const request = Taro.request<T>({ url: `${API_BASE}${path}`, method, data })
+  session?.track(request)
+  return request
 }
 
 function materializeMiniAudio(segment: VoiceSegment, index: number): string {
@@ -71,7 +75,7 @@ function materializeMiniAudio(segment: VoiceSegment, index: number): string {
   return path
 }
 
-function useLectureVoice() {
+function useLectureVoice(session: LessonSession) {
   const [status, setStatus] = useState<SpeechStatus>({ sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
   const miniAudioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null)
   // H5 uses the browser's real Audio element.  It is substantially more
@@ -105,6 +109,7 @@ function useLectureVoice() {
       }
       return
     }
+    const sessionToken = session.token()
     try {
       const playbackToken = ++playbackTokenRef.current
       setStatus({ sceneId, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
@@ -113,7 +118,7 @@ function useLectureVoice() {
       // This removes the former "wait for five paragraphs" dead time.
       const getSegments = async (part: string[]) => {
         if (!part.length) return [] as VoiceSegment[]
-        const response = await apiRequest<{ segments?: VoiceSegment[], detail?: string }>('/api/v1/voice/synthesize', 'POST', { paragraphs: part })
+        const response = await apiRequest<{ segments?: VoiceSegment[], detail?: string }>('/api/v1/voice/synthesize', 'POST', { paragraphs: part }, session)
         const data = response.data as { segments?: VoiceSegment[], detail?: string }
         if (response.statusCode >= 400 || !data.segments?.length) throw new Error(data.detail || '朗读音频暂时不可用')
         return data.segments
@@ -121,12 +126,15 @@ function useLectureVoice() {
       const firstPromise = getSegments(paragraphs.slice(0, 1))
       const restPromise = getSegments(paragraphs.slice(1))
       const segments = await firstPromise
-      if (playbackToken !== playbackTokenRef.current) return
+      if (playbackToken !== playbackTokenRef.current || !session.isCurrent(sessionToken)) return
       let remainingLoaded = false
-      const remaining = restPromise.then(items => { remainingLoaded = true; segments.push(...items); return items })
+      const remaining = restPromise.then(
+        items => { remainingLoaded = true; segments.push(...items); return items },
+        () => { remainingLoaded = true; return [] as VoiceSegment[] }
+      )
       let currentIndex = 0
       const playNext = async () => {
-        if (playbackToken !== playbackTokenRef.current) return
+        if (playbackToken !== playbackTokenRef.current || !session.isCurrent(sessionToken)) return
         const nextSegment = segments[currentIndex]
         if (!nextSegment) {
           // The teacher should never race ahead of queued audio. At most this
@@ -149,17 +157,20 @@ function useLectureVoice() {
           webAudioRef.current = audio
           audio.onended = () => { currentIndex += 1; void playNext() }
           audio.ontimeupdate = () => {
+            if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
             const subtitles = segments[currentIndex]?.subtitles || []
             const now = Math.round(audio.currentTime * 1000)
             const activeIndex = subtitles.findIndex(item => now >= item.begin_time && now < item.end_time)
             if (activeIndex >= 0) setStatus(current => current.sceneId === sceneId && current.activeIndex !== activeIndex ? { ...current, subtitles, activeIndex } : current)
           }
           audio.onerror = () => {
+            if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
             setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
             Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
           }
           audio.src = src
           audio.play().catch(() => {
+            if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
             setStatus(current => current.sceneId === sceneId ? { ...current, paused: true } : current)
             Taro.showToast({ title: '浏览器阻止自动播放，点“朗读本段”即可播放', icon: 'none' })
           })
@@ -170,12 +181,14 @@ function useLectureVoice() {
         audio.offEnded(); audio.offError(); audio.offTimeUpdate()
         audio.onEnded(() => { currentIndex += 1; void playNext() })
         audio.onTimeUpdate(() => {
+          if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
           const subtitles = segments[currentIndex]?.subtitles || []
           const now = Math.round(audio.currentTime * 1000)
           const activeIndex = subtitles.findIndex(item => now >= item.begin_time && now < item.end_time)
           if (activeIndex >= 0) setStatus(current => current.sceneId === sceneId && current.activeIndex !== activeIndex ? { ...current, subtitles, activeIndex } : current)
         })
         audio.onError(() => {
+          if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
           Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
         })
@@ -184,11 +197,12 @@ function useLectureVoice() {
       }
       void playNext()
     } catch (error) {
+      if (!session.isCurrent(sessionToken)) return
       setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
       Taro.showToast({ title: error instanceof Error ? error.message : '朗读暂时不可用', icon: 'none' })
       return
     }
-  }, [status.sceneId, status.paused])
+  }, [session, status.sceneId, status.paused])
 
   useEffect(() => () => {
     miniAudioRef.current?.destroy()
@@ -231,7 +245,8 @@ export default function Index() {
   const openingRequestRef = useRef('')
   const autoReadNextSceneRef = useRef(false)
   const turnSequenceRef = useRef(0)
-  const lectureVoice = useLectureVoice()
+  const lessonSessionRef = useRef<LessonSession>(createLessonSession())
+  const lectureVoice = useLectureVoice(lessonSessionRef.current)
   const course = learning.activeCourseId ? COURSE_CONTENT[learning.activeCourseId] : null
   const progress = course ? learning.courses[course.id] : null
   const unit = course && progress ? course.units[progress.unitIndex] : null
@@ -259,6 +274,22 @@ export default function Index() {
     try { Taro.setStorageSync(STORAGE_KEY, next) } catch { /* storage can be unavailable in privacy mode */ }
   }
 
+  const closeVisibleLesson = useCallback(() => {
+    lessonSessionRef.current.close()
+    turnSequenceRef.current += 1
+    openingRequestRef.current = ''
+    autoReadNextSceneRef.current = false
+    lectureVoice.stop()
+    setSending(false)
+    setSubmittingInteraction(false)
+    setCardLoading(false)
+    setAwaitingNext(null)
+    setPresentedCard(null)
+    setCaptionExpanded(false)
+    setChatDraft('')
+    setCourseChatCompleted(false)
+  }, [lectureVoice.stop])
+
   useEffect(() => {
     if (course && progress) setAnswer(progress.answers[progress.unitIndex] || (progress.unitIndex === 7 ? progress.actionCard : ''))
   }, [course?.id, progress?.unitIndex, progress?.reviewingUnit])
@@ -270,6 +301,8 @@ export default function Index() {
       if (openingRequestRef.current === requestKey) return
       openingRequestRef.current = requestKey
       let cancelled = false
+      const session = lessonSessionRef.current
+      const sessionToken = session.token()
       setCardLoading(true)
       // A course opens on a concrete choice, not an AI monologue.  The first
       // voice, captions and teaching artifacts begin only after the learner
@@ -279,15 +312,15 @@ export default function Index() {
       const nextUnit = course.units[1]
       apiRequest<Partial<PresentedCard>>('/api/v1/lessons/interaction-card', 'POST', {
         course_id: course.id, unit_id: nextUnit?.id
-      }).then(result => {
+      }, session).then(result => {
         const card = result.data as Partial<PresentedCard>
         if (result.statusCode >= 400 || card.tool_name !== 'present_interaction_card' || card.unit_id !== nextUnit?.id) throw new Error('first card failed')
-        if (cancelled) return
+        if (cancelled || !session.isCurrent(sessionToken)) return
         setPresentedCard(card as PresentedCard)
         persist(advanceCourse(learning, course.id, { answer: '第一题已呈现' }))
       }).catch(() => {
-        if (!cancelled) Taro.showToast({ title: '第一道题暂时未送达，请重新进入课程', icon: 'none' })
-      }).finally(() => { if (!cancelled) setCardLoading(false) })
+        if (!cancelled && session.isCurrent(sessionToken)) Taro.showToast({ title: '第一道题暂时未送达，请重新进入课程', icon: 'none' })
+      }).finally(() => { if (!cancelled && session.isCurrent(sessionToken)) setCardLoading(false) })
       return () => { cancelled = true }
     }
     if (presentedCard?.course_id === course.id && presentedCard.unit_id === unit.id) {
@@ -295,23 +328,26 @@ export default function Index() {
       return
     }
     let cancelled = false
+    const session = lessonSessionRef.current
+    const sessionToken = session.token()
     setPresentedCard(null)
     setCardLoading(true)
     apiRequest<Partial<PresentedCard>>('/api/v1/lessons/interaction-card', 'POST', {
       course_id: course.id, unit_id: unit.id
-    }).then(result => {
+    }, session).then(result => {
       const data = result.data as Partial<PresentedCard>
-      if (!cancelled && result.statusCode < 400 && data.tool_name === 'present_interaction_card' && data.unit_id === unit.id) setPresentedCard(data as PresentedCard)
-    }).catch(() => undefined).finally(() => { if (!cancelled) setCardLoading(false) })
+      if (!cancelled && session.isCurrent(sessionToken) && result.statusCode < 400 && data.tool_name === 'present_interaction_card' && data.unit_id === unit.id) setPresentedCard(data as PresentedCard)
+    }).catch(() => undefined).finally(() => { if (!cancelled && session.isCurrent(sessionToken)) setCardLoading(false) })
     return () => { cancelled = true }
   }, [course?.id, unit?.id, progress?.unitIndex, presentedCard?.course_id, presentedCard?.unit_id])
 
   const startCourse = (courseId: CourseId) => {
+    closeVisibleLesson()
     const target = learning.courses[courseId]
     setAnswer(target.answers[target.unitIndex] || (target.unitIndex === 7 ? target.actionCard : ''))
     persist(selectCourse(learning, courseId))
   }
-  const goHome = () => { setAnswer(''); persist(leaveCourse(learning)) }
+  const goHome = () => { closeVisibleLesson(); setAnswer(''); persist(leaveCourse(learning)) }
 
   const restart = () => {
     if (!course) return
@@ -321,16 +357,7 @@ export default function Index() {
       confirmText: '重新开始',
       success: result => {
         if (result.confirm) {
-          turnSequenceRef.current += 1
-          openingRequestRef.current = ''
-          autoReadNextSceneRef.current = false
-          lectureVoice.stop()
-          setCaptionExpanded(false)
-          setAwaitingNext(null)
-          setPresentedCard(null)
-          setCardLoading(false)
-          setCourseChatCompleted(false)
-          setChatDraft('')
+          closeVisibleLesson()
           persist(restartCourse(learning, course.id))
           setChatByUnit(current => ({ ...current, [course.id]: [] }))
           setCardTimeline(current => ({ ...current, [course.id]: [] }))
@@ -343,6 +370,8 @@ export default function Index() {
   const sendChat = async () => {
     const message = chatDraft.trim()
     if (!message || !course || !unit || !progress || sending) return
+    const session = lessonSessionRef.current
+    const sessionToken = session.token()
     const turnId = ++turnSequenceRef.current
     const userMessage: ChatMessage = { role: 'user', text: message, unitId: unit.id, turnId }
     const pendingMessage: ChatMessage = { role: 'assistant', text: '程老师正在整理这一段讲解…', unitId: unit.id, pending: true, turnId }
@@ -370,10 +399,10 @@ export default function Index() {
             next_unit_id: awaitingNext?.unitId === unit.id ? awaitingNext.nextUnitId : '',
             course_finished: courseChatCompleted
           }
-      })
+      }, session)
       const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.reply) throw new Error('chat request failed')
-      if (turnId !== turnSequenceRef.current) return
+      if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
       setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', text: data.reply!, unitId: unit.id, turnId, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source, teachingScene: data.teaching_scene }] }))
       if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === course.units[progress.unitIndex + 1]?.id) {
         setPresentedCard(data.tool_call)
@@ -382,10 +411,10 @@ export default function Index() {
         setAwaitingNext(null)
       }
     } catch {
-      if (turnId !== turnSequenceRef.current) return
+      if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
       setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', text: `这次没连上老师，但主线先别丢：${course.focus}。你可以稍后再问，或者先回到刚才的生活情境想一想。`, unitId: unit.id, turnId, evidenceIds: [], source: 'connection_error' }] }))
     } finally {
-      setSending(false)
+      if (session.isCurrent(sessionToken)) setSending(false)
     }
   }
 
@@ -396,6 +425,8 @@ export default function Index() {
 
   const continueLesson = async () => {
     if (!course || !unit || !canContinue || submittingInteraction || courseChatCompleted) return
+    const session = lessonSessionRef.current
+    const sessionToken = session.token()
     const submitted = answer
     const nextUnit = course.units[progress!.unitIndex + 1]
     autoReadNextSceneRef.current = true
@@ -415,17 +446,18 @@ export default function Index() {
             current_card_answer: humanizeInteractionAnswer(submitted),
             course_finished: true
           }
-        })
+        }, session)
         const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }
         if (result.statusCode >= 400 || !data.reply) throw new Error('action card feedback failed')
+        if (!session.isCurrent(sessionToken)) return
         setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.reply!, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source || 'local_fallback', teachingScene: data.teaching_scene }] }))
         persist(advanceCourse(learning, course.id, { answer: submitted }))
         setAnswer('')
         setCourseChatCompleted(true)
       } catch {
-        Taro.showToast({ title: '老师暂时没收到行动卡，请重试', icon: 'none' })
+        if (session.isCurrent(sessionToken)) Taro.showToast({ title: '老师暂时没收到行动卡，请重试', icon: 'none' })
       } finally {
-        setSubmittingInteraction(false)
+        if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
       }
       return
     }
@@ -443,9 +475,10 @@ export default function Index() {
             current_card_completed: true,
             current_card_answer: humanizeInteractionAnswer(submitted)
           }
-      })
+      }, session)
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.assistant_reply?.reply || (data.tool_call && (data.tool_call.tool_name !== 'present_interaction_card' || data.tool_call.unit_id !== nextUnit.id))) throw new Error('interaction turn failed')
+      if (!session.isCurrent(sessionToken)) return
       setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene }] }))
       if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === nextUnit.id) {
         setPresentedCard(data.tool_call)
@@ -458,9 +491,9 @@ export default function Index() {
         setAwaitingNext({ unitId: unit.id, nextUnitId: nextUnit.id, answer: submitted })
       }
     } catch {
-      Taro.showToast({ title: '老师暂时没收到答案，请重试', icon: 'none' })
+      if (session.isCurrent(sessionToken)) Taro.showToast({ title: '老师暂时没收到答案，请重试', icon: 'none' })
     } finally {
-      setSubmittingInteraction(false)
+      if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
     }
   }
 
@@ -484,6 +517,10 @@ export default function Index() {
     full_caption: [unit?.prompt || '从生活情境开始。', unit?.teachingGoal || course?.focus || '先把问题看清楚。', '如果哪里不明白，随时在下方问程老师。']
   }
   useEffect(() => { lectureVoice.stop() }, [course?.id])
+  useEffect(() => () => {
+    lessonSessionRef.current.close()
+    lectureVoice.stop()
+  }, [lectureVoice.stop])
   useEffect(() => {
     if (!autoReadNextSceneRef.current || lectureMessages.length === 0) return
     autoReadNextSceneRef.current = false
