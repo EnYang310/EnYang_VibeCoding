@@ -919,3 +919,115 @@ $green: #2e6d5b;
   .chat-compose input { min-height: 62px; font-size: clamp(18px, 1.2vw, 22px); }
   .chat-compose button { width: clamp(98px, 7vw, 142px); min-height: 62px; font-size: clamp(17px, 1.1vw, 21px); }
 }
+
+/* Readability pass — this product deliberately uses a light learning surface.
+   A device-wide dark preference must never turn the paper cards into light text
+   on white, nor turn the mobile lesson into a scaled-down desktop window. */
+.home-page,
+.lesson-page {
+  color-scheme: light;
+  --qc-bg: #f3f7f4;
+  --qc-surface: #ffffff;
+  --qc-soft: #eef6f1;
+  --qc-ink: #14362b;
+  --qc-body: #3b5d52;
+  --qc-muted: #698077;
+  --qc-line: #cbddd4;
+  --qc-accent: #087f5b;
+  --qc-accent-dark: #056247;
+  --qc-accent-wash: #e1f3eb;
+  --qc-shadow: 0 16px 38px rgba(24, 57, 45, .08);
+}
+
+.home-page { background: #f3f7f4; }
+.home-page .hero-block,
+.home-page .resume-card,
+.home-page .course-card { color: var(--qc-ink); background: #ffffff; }
+.home-page .hero-block { background: linear-gradient(120deg, #ffffff 0%, #f2faf6 62%, #e7f3ee 100%); }
+.lesson-page .classroom-transcript { background: linear-gradient(115deg, #f7faf8 0%, #ffffff 58%, #f0f7f3 100%); }
+.lesson-page .caption-dock { background: #f8fbf9; }
+.lesson-page .teaching-stage .classroom-composer { background: #ffffff; }
+.lesson-page .artifact-scenario { background: #f6fbf8; }
+.lesson-page .artifact-warning { background: #fff8f5; }
+.lesson-page .chat-bubble.assistant { background: #ffffff; }
+
+@media (max-width: 760px) {
+  .page.home-page { padding: 16px 14px 34px; }
+  .home-page .home-nav { min-height: 52px; padding: calc(10px + env(safe-area-inset-top)) 2px 13px; }
+  .home-page .wordmark { font-size: 24px; }
+  .home-page .nav-tag { font-size: 15px; }
+  .home-page .hero-block {
+    min-height: 0;
+    margin: 18px 0 16px;
+    padding: 28px 22px 24px;
+    border-left-width: 6px;
+    border-radius: 16px;
+  }
+  .home-page .hero-kicker { font-size: 15px; }
+  .home-page .hero-title { margin: 16px 0 14px; font-size: clamp(39px, 11.7vw, 48px); line-height: 1.08; }
+  .home-page .hero-copy { max-width: 22ch; font-size: 20px; line-height: 1.6; }
+  .home-page .learning-stats { gap: 23px; margin-top: 24px; padding-top: 16px; }
+  .home-page .stat-number { font-size: 30px; }
+  .home-page .stat-label { margin-top: 3px; font-size: 15px; }
+  .home-page .resume-card { margin: 16px 0 0; padding: 20px 18px; border-radius: 15px; }
+  .home-page .resume-kicker, .home-page .course-number, .home-page .section-eyebrow { font-size: 15px; }
+  .home-page .resume-title { margin-top: 8px; font-size: 26px; line-height: 1.22; }
+  .home-page .resume-meta { font-size: 18px; line-height: 1.55; }
+  .home-page .section-heading { margin-top: 36px; margin-bottom: 15px; }
+  .home-page .section-title { font-size: 34px; line-height: 1.15; }
+  .home-page .section-count, .home-page .course-status, .home-page .review-badge { font-size: 15px; }
+  .home-page .course-grid { gap: 13px; }
+  .home-page .course-card { min-height: 0; padding: 20px 19px; border-radius: 15px; }
+  .home-page .course-title { margin-top: 20px; font-size: 29px; line-height: 1.2; }
+  .home-page .course-subtitle { min-height: 0; margin-top: 9px; font-size: 19px; line-height: 1.55; }
+  .home-page .course-footer { margin-top: 17px; }
+  .home-page .home-principle { margin-top: 18px; padding: 20px 18px; border-radius: 15px; font-size: 19px; line-height: 1.65; }
+  .home-page .principle-title { font-size: 26px; }
+
+  .lesson-page { padding-top: 10px; }
+  .lesson-page .topbar, .lesson-page .unit-progress, .lesson-page .classroom-title { margin-left: 16px; margin-right: 16px; }
+  .lesson-page .topbar { min-height: 52px; padding: calc(10px + env(safe-area-inset-top)) 0 13px; }
+  .lesson-page .wordmark { font-size: 24px; }
+  .lesson-page .lesson-position, .lesson-page .text-button { font-size: 14px; }
+  .lesson-page .unit-progress { margin-top: 14px; }
+  .lesson-page .classroom-title { margin-top: 24px; margin-bottom: 17px; }
+  .lesson-page .eyebrow, .course-start-card .teacher-line, .teacher-line, .choice-label { font-size: 14px; }
+  .lesson-page .lesson-title { font-size: clamp(36px, 10vw, 43px); line-height: 1.1; }
+
+  /* The transcript grows with its content on a phone; no artificial empty stage. */
+  .teaching-stage { height: auto; min-height: 0; overflow: visible; border-radius: 0; box-shadow: none; }
+  .classroom-transcript { display: block; flex: none; height: auto; min-height: 0; overflow: visible !important; padding: 16px 14px 10px; }
+  .teaching-stage .course-start-card { margin: 0 0 16px; padding: 20px 18px; }
+  .course-start-title { margin-top: 8px; font-size: 29px; line-height: 1.2; }
+  .course-start-copy, .course-start-focus { font-size: 19px; line-height: 1.6; }
+  .teaching-scene-message { margin: 16px 0; padding: 20px 17px; }
+  .scene-heading { padding-bottom: 12px; }
+  .scene-title { margin: 17px 0 9px; font-size: clamp(31px, 8.7vw, 37px); line-height: 1.12; }
+  .scene-summary { font-size: 20px; line-height: 1.6; }
+  .voice-toggle { padding: 9px 11px; font-size: 14px; }
+  .artifact-stream { gap: 10px; margin-top: 19px; }
+  .artifact-card, .artifact-card:nth-child(3n + 1) { min-height: 0; padding: 17px; }
+  .artifact-label { font-size: 14px; }
+  .artifact-title { font-size: 27px; line-height: 1.23; }
+  .artifact-lead, .artifact-note, .artifact-step, .artifact-plain-items, .timeline-artifact-row, .contrast-column { font-size: 19px; line-height: 1.58; }
+
+  .stage-question-card { margin: 16px 0 20px; padding: 21px 17px; border-top-width: 5px; }
+  .card-teacher-intro { font-size: 19px; line-height: 1.58; }
+  .choice-context { margin-top: 15px; padding: 14px 13px; font-size: 18px; line-height: 1.55; }
+  .choice-question { margin-top: 18px; font-size: clamp(28px, 8vw, 33px); line-height: 1.3; }
+  .single-choice-options { gap: 10px; margin-top: 18px; }
+  .single-choice-option { min-height: 76px; padding: 17px 15px; font-size: 20px; line-height: 1.42; }
+  .choice-index { font-size: 15px; }
+  .submission-hint { margin-top: 13px; font-size: 16px; }
+  .primary-action, .stage-confirm { min-height: 66px; margin-top: 12px; font-size: 22px !important; }
+
+  .caption-dock { min-height: 72px; padding: 12px 14px; }
+  .caption-short, .caption-synced { font-size: 17px; line-height: 1.5; }
+  .caption-expand { font-size: 15px; }
+  .teaching-stage .classroom-composer { position: sticky; z-index: 8; bottom: 0; padding: 11px 14px calc(12px + env(safe-area-inset-bottom)); border-bottom: 1px solid var(--qc-line); box-shadow: 0 -8px 20px rgba(28, 61, 50, .06); }
+  .chat-compose { gap: 9px; }
+  .chat-compose input { min-height: 55px; padding: 13px 14px; font-size: 18px; }
+  .chat-compose button { width: 78px; min-height: 55px; font-size: 18px; }
+  .restart-link { margin-top: 22px; font-size: 15px; }
+  .compliance-note { margin: 17px 16px 0; font-size: 13px; line-height: 1.55; }
+}
