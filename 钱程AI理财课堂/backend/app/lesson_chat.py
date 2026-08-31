@@ -25,6 +25,10 @@ SENSITIVE_LABEL_PATTERN = re.compile(
 LONG_NUMBER_PATTERN = re.compile(r"(?<!\d)(?:\d[\s-]?){6,}(?!\d)")
 
 
+class TeacherModelUnavailable(RuntimeError):
+    """The personalised teacher turn could not be generated safely."""
+
+
 def sanitize_user_text(text: str) -> str:
     compact = " ".join(text.split())[:500]
     compact = SENSITIVE_LABEL_PATTERN.sub(lambda match: f"{match.group('label')}：[已隐藏敏感信息]", compact)
@@ -151,7 +155,11 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         compliance_redirect=False,
     )
     if generated is None:
-        return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
+        # A generic courseware scene is fine for a deterministic safety
+        # boundary above, but it must never impersonate a teacher who is
+        # responding to this learner's answer. Preserve the answer and let the
+        # learner retry instead of repeating the same stock lecture.
+        raise TeacherModelUnavailable("老师正在生成针对这份答案的讲解，请稍后重试。")
     by_id = {item.evidence_id: item for item in evidence}
     reply = generated.reply
     if generated.next_step_invitation and generated.next_step_invitation.strip() not in reply:

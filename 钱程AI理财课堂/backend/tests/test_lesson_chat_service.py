@@ -1,7 +1,7 @@
 import pytest
 
-from app.kimi import _safe_chat_generated
-from app.lesson_chat import personalized_lesson_chat, sanitize_user_text
+from app.kimi import KimiClient, _safe_chat_generated
+from app.lesson_chat import TeacherModelUnavailable, personalized_lesson_chat, sanitize_user_text
 from app.schemas import ChatRequest, ChatResponse, TeachingScene
 
 
@@ -104,17 +104,37 @@ async def test_real_transaction_question_never_reaches_the_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_key_falls_back_to_courseware_reply(monkeypatch):
+async def test_missing_key_surfaces_teacher_unavailable_instead_of_a_generic_courseware_reply(monkeypatch):
     monkeypatch.delenv("MOONSHOT_API_KEY", raising=False)
     monkeypatch.delenv("KIMI_SHARED_KEY_PATH", raising=False)
-    response = await personalized_lesson_chat(
-        ChatRequest(course_id="product-map", unit_id="ai-feedback-1", message="流动性是什么意思？")
-    )
-    assert response.source == "local_fallback"
-    assert response.evidence_ids[0].startswith("product-map.")
-    assert response.evidence_notes
-    assert response.evidence_notes[0].text
-    assert "推荐" not in response.reply
+    with pytest.raises(TeacherModelUnavailable):
+        await personalized_lesson_chat(
+            ChatRequest(course_id="product-map", unit_id="ai-feedback-1", message="流动性是什么意思？")
+        )
+
+
+@pytest.mark.asyncio
+async def test_completed_interaction_never_substitutes_a_generic_courseware_lesson_when_the_teacher_model_is_unavailable(monkeypatch):
+    async def unavailable(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.lesson_chat.KimiClient.lesson_chat", unavailable)
+
+    with pytest.raises(TeacherModelUnavailable):
+        await personalized_lesson_chat(
+            ChatRequest(
+                course_id="money-jobs",
+                unit_id="initial-judgment",
+                message="我完成了这张互动卡。我的回答是：先留出下月房租。",
+                context={"current_card_completed": True, "current_card_answer": "先留出下月房租。"},
+            )
+        )
+
+
+def test_teacher_model_timeout_never_drops_to_eighteen_seconds(monkeypatch):
+    monkeypatch.setenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "18")
+
+    assert KimiClient().response_timeout_seconds >= 60
 
 
 @pytest.mark.asyncio

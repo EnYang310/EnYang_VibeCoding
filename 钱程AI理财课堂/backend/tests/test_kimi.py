@@ -27,7 +27,7 @@ def test_k2_6_feedback_turns_off_extended_thinking_for_a_short_lesson_reply(monk
 
 
 @pytest.mark.asyncio
-async def test_lesson_generation_uses_one_bounded_attempt_before_fast_fallback(monkeypatch):
+async def test_lesson_generation_waits_a_full_minute_before_returning_unavailable(monkeypatch):
     attempts = []
 
     class TimedOutClient:
@@ -63,4 +63,4 @@ async def test_lesson_generation_uses_one_bounded_attempt_before_fast_fallback(m
     )
 
     assert result is None
-    assert attempts == [18.0]
+    assert attempts == [60.0]

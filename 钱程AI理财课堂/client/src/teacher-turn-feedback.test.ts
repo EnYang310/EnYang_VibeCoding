@@ -7,8 +7,8 @@ describe('teacher turn feedback', () => {
     expect(answerReceivedMessage()).toContain('讲解')
   })
 
-  it('never falsely claims that a failed response means the answer was not received', () => {
-    expect(answerRequestFailedMessage()).toContain('答案已经保留')
+  it('uses a short retry prompt when the teacher has not responded in time', () => {
     expect(answerRequestFailedMessage()).not.toContain('没有收到答案')
+    expect(answerRequestFailedMessage()).toBe('LLM思考超时，请重试。')
   })
 })

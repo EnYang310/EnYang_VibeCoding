@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from app.course_data import list_courses
 from app.interaction_tools import next_unit_after, present_interaction_card
 from app.learning_gates import infer_observed_criteria, passes_gate
-from app.lesson_chat import personalized_lesson_chat
+from app.lesson_chat import TeacherModelUnavailable, personalized_lesson_chat
 from app.lesson_runtime import COURSE_FOCUS, get_lesson
 from app.rate_limit import SlidingWindowLimiter
 from app.request_lifecycle import ClientDisconnected, await_while_connected
@@ -135,6 +135,8 @@ async def lesson_chat(request: ChatRequest, http_request: Request) -> ChatRespon
         return response
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="课程或回合不存在") from exc
+    except TeacherModelUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ClientDisconnected as exc:
         raise HTTPException(status_code=499, detail="课程已离开，已取消本次讲解") from exc
 
@@ -195,6 +197,8 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
         return InteractionTurnResponse(assistant_reply=feedback, tool_call=tool_call)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="课程或回合不存在") from exc
+    except TeacherModelUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ClientDisconnected as exc:
         raise HTTPException(status_code=499, detail="课程已离开，已取消本次讲解") from exc
 

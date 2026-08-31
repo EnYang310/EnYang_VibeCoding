@@ -162,10 +162,12 @@ class KimiClient:
         # 40s × 2 retry path left learners staring at a spinner for over a
         # minute when a provider response merely missed a formatting detail.
         try:
-            configured_timeout = float(os.getenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "18"))
+            configured_timeout = float(os.getenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "60"))
         except ValueError:
-            configured_timeout = 18.0
-        self.response_timeout_seconds = max(5.0, min(configured_timeout, 30.0))
+            configured_timeout = 60.0
+        # A full 6–8 beat teaching scene is not a short chat completion. Never
+        # cut it off at an arbitrary 18 seconds and substitute a stock lesson.
+        self.response_timeout_seconds = max(60.0, min(configured_timeout, 90.0))
 
     def _key(self) -> str:
         return os.getenv("MOONSHOT_API_KEY", "").strip() or _shared_key()
@@ -253,9 +255,9 @@ class KimiClient:
         allowed_ids = {item["evidence_id"] for item in evidence}
         parsed: ChatResponse | None = None
         # The normaliser above accepts partial/loose-but-useful JSON, so a
-        # second full model generation is no longer warranted.  One bounded
-        # attempt keeps the interaction responsive; the caller has a safe,
-        # evidence-backed fallback when the provider is unavailable.
+        # second full model generation is no longer warranted. One bounded
+        # attempt avoids indefinite loading; callers preserve the learner's
+        # answer and offer a retry rather than substituting a stock lecture.
         started_at = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self.response_timeout_seconds) as client:

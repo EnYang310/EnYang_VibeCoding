@@ -3,5 +3,5 @@ export function answerReceivedMessage(): string {
 }
 
 export function answerRequestFailedMessage(): string {
-  return '你的答案已经保留。这次讲解没有成功返回，直接再点一次“确认作答”就行。'
+  return 'LLM思考超时，请重试。'
 }
