@@ -29,6 +29,10 @@ export function isInteractionComplete(unit: CourseUnit, value: string): boolean 
   return unit.interaction === 'single-choice' && Boolean(unit.options?.includes(selectedChoice(unit, value)))
 }
 
+export function shouldRevealChoiceReview(unit: CourseUnit, value: string): boolean {
+  return isInteractionComplete(unit, value) && Boolean(unit.correctOption)
+}
+
 export function humanizeInteractionAnswer(value: string): string {
   try {
     const parsed = JSON.parse(value) as Partial<AnswerEnvelope>

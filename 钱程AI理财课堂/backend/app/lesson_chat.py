@@ -8,7 +8,7 @@ from app.kimi import KimiClient
 from app.lesson_runtime import COURSE_FOCUS, UNIT_IDS, UNIT_TITLES
 from app.learning_gates import criteria_for
 from app.schemas import ChatRequest, ChatResponse, EvidenceNote, TeachingArtifact, TeachingScene
-from app.teaching_flow import append_course_finished_closing, append_follow_up_hook
+from app.teaching_flow import append_course_finished_closing
 
 
 REAL_DECISION_TERMS = (
@@ -53,8 +53,24 @@ def finish_free_question_mode(response: ChatResponse, *, course_finished: bool) 
         room_for_reply = 400 - len(append_course_finished_closing("")) - 1
         return response.model_copy(update={"reply": append_course_finished_closing(response.reply[:room_for_reply])})
     hook = response.next_step_invitation or "想把它放进自己的生活里，再追问一个最想弄明白的地方吗？"
-    room_for_reply = 400 - len(hook) - 1
-    return response.model_copy(update={"reply": append_follow_up_hook(response.reply[:room_for_reply], hook)})
+    reply = response.reply.strip()
+    if reply.endswith(hook):
+        reply = reply[:-len(hook)].rstrip("。！？!? ") or response.reply.strip()
+    scene = response.teaching_scene or TeachingScene(
+        screen_title="再想一步",
+        screen_summary=reply[:100],
+        full_caption=[reply],
+    )
+    hook_card = TeachingArtifact(
+        kind="quote",
+        appear_after_paragraph=max(len(scene.full_caption) - 1, 0),
+        title="想一想，再告诉老师",
+        lead=hook,
+    )
+    return response.model_copy(update={
+        "reply": reply[:400],
+        "teaching_scene": scene.model_copy(update={"teaching_artifacts": [*scene.teaching_artifacts, hook_card]}),
+    })
 
 
 def courseware_fallback(request: ChatRequest, *, privacy_redirect: bool = False) -> ChatResponse:
@@ -161,12 +177,9 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         # learner retry instead of repeating the same stock lecture.
         raise TeacherModelUnavailable("老师正在生成针对这份答案的讲解，请稍后重试。")
     by_id = {item.evidence_id: item for item in evidence}
-    reply = generated.reply
-    if generated.next_step_invitation and generated.next_step_invitation.strip() not in reply:
-        reply = f"{reply.rstrip('。！？!?')}。{generated.next_step_invitation}"
     response = generated.model_copy(
         update={
-            "reply": reply[:400],
+            "reply": generated.reply[:400],
             "evidence_notes": [
                 EvidenceNote(evidence_id=evidence_id, text=by_id[evidence_id].text)
                 for evidence_id in generated.evidence_ids

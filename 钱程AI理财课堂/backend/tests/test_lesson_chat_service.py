@@ -176,4 +176,6 @@ async def test_completed_interaction_keeps_the_teacher_response_personalized(mon
     assert response.source == "kimi"
     assert response.teaching_scene is not None
     assert len(response.teaching_scene.full_caption) == 6
-    assert "房租日期提前" in response.reply
+    assert "房租日期提前" not in response.reply
+    assert response.teaching_scene.teaching_artifacts[-1].title == "想一想，再告诉老师"
+    assert response.teaching_scene.teaching_artifacts[-1].lead == "如果房租日期提前，你觉得这个判断会怎么变？"

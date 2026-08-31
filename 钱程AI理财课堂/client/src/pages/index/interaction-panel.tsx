@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Text, View } from '@tarojs/components'
 import type { CourseUnit } from '../../course-content'
-import { decodeInteractionAnswer, encodeInteractionAnswer } from '../../interaction-answer'
+import { decodeInteractionAnswer, encodeInteractionAnswer, reviewedChoice, shouldRevealChoiceReview } from '../../interaction-answer'
 
 type Props = { unit: CourseUnit; value: string; accent: string; onChange: (value: string) => void }
 
@@ -10,6 +10,7 @@ export function InteractionPanel({ unit, value, accent, onChange }: Props) {
     const data = decodeInteractionAnswer(value, unit.interaction)
     return typeof data.choice === 'string' ? data.choice : ''
   }, [unit.interaction, value])
+  const choiceReview = reviewedChoice(unit, value)
   if (unit.interaction === 'narrative') return null
   return <View className='single-choice-panel'>
     <Text className='choice-label'>互动暂停点 · 单选题</Text>
@@ -26,5 +27,9 @@ export function InteractionPanel({ unit, value, accent, onChange }: Props) {
         <Text className='choice-copy'>{option}</Text>
       </View>)}
     </View>
+    {shouldRevealChoiceReview(unit, value) && <View className='immediate-choice-review'>
+      <Text>{choiceReview.yourChoice}</Text>
+      <Text className='immediate-correct-answer'>{choiceReview.correctAnswer}</Text>
+    </View>}
   </View>
 }

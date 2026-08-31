@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { COURSE_CONTENT } from './course-content'
-import { completionHint, encodeInteractionAnswer, isInteractionComplete, reviewedChoice } from './interaction-answer'
+import { completionHint, encodeInteractionAnswer, isInteractionComplete, reviewedChoice, shouldRevealChoiceReview } from './interaction-answer'
 
 describe('interaction completion contracts', () => {
   it('uses single-choice cards for every interactive lesson turn', () => {
@@ -33,5 +33,11 @@ describe('interaction completion contracts', () => {
 
     expect(review.yourChoice).toBe(`你的选择：${unit.options?.[1]}`)
     expect(review.correctAnswer).toBe(`正确答案：${unit.correctOption}`)
+  })
+
+  it('reveals the answer review as soon as a valid option is selected', () => {
+    const unit = COURSE_CONTENT['money-jobs'].units[1]
+    expect(shouldRevealChoiceReview(unit, '')).toBe(false)
+    expect(shouldRevealChoiceReview(unit, encodeInteractionAnswer('single-choice', { choice: unit.options?.[1] }))).toBe(true)
   })
 })

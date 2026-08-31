@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 
-MAX_ASSISTANT_REPLIES_BETWEEN_CARDS = 3
+MAX_ASSISTANT_REPLIES_BETWEEN_CARDS = 2
 COURSE_FINISHED_CLOSING = "这一课的知识点已经讲完了。之后有任何问题，随时问我。"
 
 
@@ -20,7 +20,7 @@ def should_present_next_card(
     """Return whether the reply being generated must be followed by a card.
 
     ``assistant_replies_since_card`` counts replies already delivered after the
-    learner submitted the current choice.  The teacher may give up to three
+    learner submitted the current choice.  The teacher may give up to two
     full explanations before the next exercise arrives after narration ends.
     """
     if course_finished or not current_card_completed or not next_unit_id:

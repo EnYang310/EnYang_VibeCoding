@@ -241,7 +241,7 @@ class KimiClient:
                 "一旦所有 advancement_criteria 已满足，必须 teaching_decision=advance，不能临时增加题目、隐含标准或为了延长聊天继续追问。",
                 "observed_criteria 必须逐字使用已满足的 advancement_criteria；missing_criterion 只能填写当前最小缺口。",
                 "只输出 JSON：reply、evidence_ids、learning_signals、suggested_optional_card、teaching_decision、observed_criteria、missing_criterion、next_step_invitation、teaching_scene。",
-                "除 course_finished 为 true 的最后一张互动卡讲解外，每次 reply 的末尾都必须有一句具体、自然的追问钩子，邀请用户说出生活情境、困惑或反例；不要使用空泛的“还有问题吗”。把这句话同时填进 next_step_invitation。即使已达到 advance，也仍用一个和本段知识有关的钩子帮助用户追问；系统会在本段音频结束后自行呈现下一题，绝不能要求用户说任何触发词。",
+                "除 course_finished 为 true 的最后一张互动卡讲解外，每次都要给一句具体、自然的追问钩子，邀请学生说出生活情境、困惑或反例；不要使用空泛的“还有问题吗”。只把这句话填进 next_step_invitation，系统会把它展示成一张讲解组件卡，不要把它写进 reply 或 full_caption。即使已达到 advance，也仍用一个和本段知识有关的钩子帮助学生追问；系统会在本段音频结束后自行呈现下一题，绝不能要求学生说任何触发词。",
                 "如果 course_finished 为 true，先讲解用户刚完成选择的理由及一个延伸知识点，再明确说“这一课的知识点已经讲完了。之后有任何问题，随时问我。”；此后是自由聊天，不再邀请下一张卡。",
                 "如果 free_chat_mode 为 true，课程已经收束：直接回答用户当前问题并继续用教学组件帮助理解，但不要重复课程结束语，也绝不再邀请或呈现新的互动卡。",
                 "evidence_ids 至少一个且只能从 allowed_courseware 的 evidence_id 选择。",
