@@ -31,6 +31,30 @@ def test_generated_reply_rejects_transaction_instruction():
     assert result is None
 
 
+def test_generated_reply_keeps_a_partial_teacher_scene_instead_of_discarding_the_turn():
+    result = _safe_chat_generated(
+        {
+            "reply": "先把下月房租留出来，这个判断先抓住了日期。",
+            "evidence_ids": ["money-jobs.core-1"],
+            "teaching_scene": {
+                "screen_title": "先看日期",
+                # Models sometimes return a string instead of the requested
+                # array, or fewer beats than the ideal teaching rhythm.  That
+                # should render as a usable lesson, not trigger another full
+                # model generation.
+                "full_caption": "房租日期最近，所以它不是一笔可以随意挪用的钱。先把近期用途留住，才有后面的选择。",
+                "teaching_artifacts": [{"kind": "unexpected-layout", "title": "忽略这一项"}],
+            },
+        },
+        allowed_evidence_ids={"money-jobs.core-1"},
+    )
+
+    assert result is not None
+    assert result.teaching_scene is not None
+    assert result.teaching_scene.full_caption == ["房租日期最近，所以它不是一笔可以随意挪用的钱。先把近期用途留住，才有后面的选择。"]
+    assert result.teaching_scene.teaching_artifacts == []
+
+
 @pytest.mark.parametrize(
     "reply",
     [

@@ -83,7 +83,7 @@ def test_interaction_card_endpoint_executes_the_presentation_tool():
     assert body["status"] == "presented"
 
 
-def test_interaction_submission_gets_ai_feedback_but_waits_for_learner_intent(monkeypatch):
+def test_interaction_submission_queues_the_next_card_after_the_teacher_turn(monkeypatch):
     async def fake_chat(request):
         assert "我完成了这张互动卡" in request.message
         assert "本回合回答" in request.context.answer_summaries[-1]
@@ -103,4 +103,5 @@ def test_interaction_submission_gets_ai_feedback_but_waits_for_learner_intent(mo
     assert response.status_code == 200
     body = response.json()
     assert body["assistant_reply"]["source"] == "kimi"
-    assert body["tool_call"] is None
+    assert body["tool_call"]["tool_name"] == "present_interaction_card"
+    assert body["tool_call"]["unit_id"] == "hands-on"

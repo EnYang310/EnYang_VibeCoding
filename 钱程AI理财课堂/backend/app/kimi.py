@@ -1,13 +1,14 @@
 import json
+import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from app.schemas import ChatResponse, TeachingScene
-from app.teaching_flow import has_dense_artifact_cadence, has_short_caption_beats
+from app.schemas import ChatResponse, TeachingArtifact, TeachingScene
 
 
 PROHIBITED_REPLY_PATTERNS = (
@@ -18,6 +19,12 @@ PROHIBITED_REPLY_PATTERNS = (
     re.compile(r"(?<!\d)\d{6}(?!\d)"),
     re.compile(r"(?:保证能赚|肯定赚钱|稳赚不赔|保本高收益)"),
 )
+
+SUPPORTED_ARTIFACT_KINDS = {
+    "one_liner", "steps", "timeline", "contrast", "scenario", "checklist", "quote", "warning",
+}
+
+logger = logging.getLogger(__name__)
 
 
 def _shared_key() -> str:
@@ -34,6 +41,10 @@ def _parse_json(content: str) -> dict[str, Any] | None:
     cleaned = content.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    if not cleaned.startswith("{"):
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start >= 0 and end > start:
+            cleaned = cleaned[start : end + 1]
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError:
@@ -41,9 +52,72 @@ def _parse_json(content: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _as_text(value: Any, *, default: str = "", limit: int = 180) -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return (text or default)[:limit]
+
+
+def _caption_beats(value: Any, *, fallback: str) -> list[str]:
+    if isinstance(value, str):
+        values = [part for part in re.split(r"(?:\r?\n){1,}", value) if part.strip()]
+    elif isinstance(value, list):
+        values = value
+    else:
+        values = []
+    beats = [_as_text(item, limit=180) for item in values if _as_text(item, limit=180)]
+    return (beats or [_as_text(fallback, default="老师先带你把这一点看清楚。", limit=180)])[:12]
+
+
+def _normalise_scene(value: Any, *, reply: str) -> TeachingScene:
+    """Accept useful model output even when it misses our preferred shape.
+
+    Prompt constraints define the ideal lesson cadence. They must not turn a
+    valid classroom answer into a second expensive model request just because
+    an array became a string or one visual card is malformed.
+    """
+    raw = value if isinstance(value, dict) else {}
+    captions = _caption_beats(raw.get("full_caption"), fallback=reply)
+    artifacts: list[TeachingArtifact] = []
+    raw_artifacts = raw.get("teaching_artifacts", [])
+    if isinstance(raw_artifacts, list):
+        for item in raw_artifacts[:11]:
+            if not isinstance(item, dict):
+                continue
+            kind = _as_text(item.get("kind"), limit=32)
+            if kind not in SUPPORTED_ARTIFACT_KINDS:
+                continue
+            try:
+                appearance = int(item.get("appear_after_paragraph", len(artifacts)))
+            except (TypeError, ValueError):
+                appearance = len(artifacts)
+            artifacts.append(TeachingArtifact(
+                kind=kind,
+                appear_after_paragraph=max(0, min(appearance, len(captions) - 1)),
+                title=_as_text(item.get("title"), default="跟着老师想一想", limit=36),
+                lead=_as_text(item.get("lead"), limit=120),
+                items=[_as_text(entry, limit=120) for entry in item.get("items", []) if _as_text(entry, limit=120)][:4] if isinstance(item.get("items"), list) else [],
+                note=_as_text(item.get("note"), limit=180),
+            ))
+    return TeachingScene(
+        screen_title=_as_text(raw.get("screen_title"), default="程老师讲解", limit=40),
+        screen_summary=_as_text(raw.get("screen_summary"), default=captions[0], limit=100),
+        key_points=[_as_text(item, limit=100) for item in raw.get("key_points", []) if _as_text(item, limit=100)][:3] if isinstance(raw.get("key_points"), list) else [],
+        common_misconception=_as_text(raw.get("common_misconception"), limit=100),
+        right_reframe=_as_text(raw.get("right_reframe"), limit=100),
+        subtitle_excerpt=_as_text(raw.get("subtitle_excerpt"), default=captions[0], limit=140),
+        full_caption=captions,
+        teaching_artifacts=artifacts,
+    )
+
+
 def _safe_chat_generated(payload: dict[str, Any], *, allowed_evidence_ids: set[str]) -> ChatResponse | None:
     try:
-        evidence_ids = [str(item).strip() for item in payload["evidence_ids"]]
+        raw_evidence_ids = payload.get("evidence_ids", [])
+        if isinstance(raw_evidence_ids, str):
+            raw_evidence_ids = [raw_evidence_ids]
+        evidence_ids = [str(item).strip() for item in raw_evidence_ids if str(item).strip()]
         # Some otherwise valid Kimi JSON responses return null for this optional
         # teaching signal.  It must not discard a safe, cited classroom answer.
         advance_recommendation = str(payload.get("advance_recommendation") or "stay").strip()
@@ -52,22 +126,20 @@ def _safe_chat_generated(payload: dict[str, Any], *, allowed_evidence_ids: set[s
         decision = str(payload.get("teaching_decision") or "probe").strip()
         if decision not in {"advance", "probe", "repair"}:
             decision = "probe"
-        teaching_scene = TeachingScene(**payload["teaching_scene"]) if payload.get("teaching_scene") else None
-        if teaching_scene is None or not has_short_caption_beats(teaching_scene.full_caption) or not has_dense_artifact_cadence(
-                paragraph_count=len(teaching_scene.full_caption),
-                appear_after_paragraphs=[item.appear_after_paragraph for item in teaching_scene.teaching_artifacts],
-            ):
+        reply = _as_text(payload.get("reply"), limit=400)
+        if not reply:
             return None
+        teaching_scene = _normalise_scene(payload.get("teaching_scene"), reply=reply)
         candidate = ChatResponse(
-            reply=str(payload["reply"]).strip(),
+            reply=reply,
             evidence_ids=evidence_ids,
-            learning_signals=[str(item).strip()[:60] for item in payload.get("learning_signals", [])][:4],
-            suggested_optional_card=(str(payload["suggested_optional_card"]).strip()[:120] if payload.get("suggested_optional_card") else None),
+            learning_signals=[str(item).strip()[:60] for item in payload.get("learning_signals", []) if str(item).strip()][:4] if isinstance(payload.get("learning_signals", []), list) else [],
+            suggested_optional_card=(_as_text(payload.get("suggested_optional_card"), limit=120) or None),
             advance_recommendation="continue" if decision == "advance" else "stay",
             teaching_decision=decision,
-            observed_criteria=[str(item).strip()[:120] for item in payload.get("observed_criteria", []) if str(item).strip()][:4],
-            missing_criterion=(str(payload["missing_criterion"]).strip()[:160] if payload.get("missing_criterion") else None),
-            next_step_invitation=(str(payload["next_step_invitation"]).strip()[:160] if payload.get("next_step_invitation") else None),
+            observed_criteria=[str(item).strip()[:120] for item in payload.get("observed_criteria", []) if str(item).strip()][:4] if isinstance(payload.get("observed_criteria", []), list) else [],
+            missing_criterion=(_as_text(payload.get("missing_criterion"), limit=160) or None),
+            next_step_invitation=(_as_text(payload.get("next_step_invitation"), limit=160) or None),
             teaching_scene=teaching_scene,
             compliance_mode="education_only",
             source="kimi",
@@ -85,6 +157,15 @@ class KimiClient:
     def __init__(self) -> None:
         self.base_url = os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.cn/v1").rstrip("/")
         self.model = os.getenv("KIMI_MODEL", "kimi-k2.6").strip() or "kimi-k2.6"
+        # A classroom response that has not arrived after this budget is less
+        # useful than the local, courseware-grounded teacher fallback.  The old
+        # 40s × 2 retry path left learners staring at a spinner for over a
+        # minute when a provider response merely missed a formatting detail.
+        try:
+            configured_timeout = float(os.getenv("KIMI_RESPONSE_TIMEOUT_SECONDS", "18"))
+        except ValueError:
+            configured_timeout = 18.0
+        self.response_timeout_seconds = max(5.0, min(configured_timeout, 30.0))
 
     def _key(self) -> str:
         return os.getenv("MOONSHOT_API_KEY", "").strip() or _shared_key()
@@ -171,19 +252,27 @@ class KimiClient:
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         allowed_ids = {item["evidence_id"] for item in evidence}
         parsed: ChatResponse | None = None
-        # A malformed JSON turn or a transient gateway response must not turn a
-        # normal classroom exchange into a canned local reply immediately.
-        for _attempt in range(2):
-            try:
-                async with httpx.AsyncClient(timeout=40.0) as client:
-                    response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=body)
-                    response.raise_for_status()
-                    content = response.json()["choices"][0]["message"]["content"]
-            except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
-                continue
+        # The normaliser above accepts partial/loose-but-useful JSON, so a
+        # second full model generation is no longer warranted.  One bounded
+        # attempt keeps the interaction responsive; the caller has a safe,
+        # evidence-backed fallback when the provider is unavailable.
+        started_at = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=self.response_timeout_seconds) as client:
+                response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=body)
+                response.raise_for_status()
+                content = response.json()["choices"][0]["message"]["content"]
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
+            content = ""
+        if content:
             parsed = _safe_chat_generated(_parse_json(str(content)) or {}, allowed_evidence_ids=allowed_ids)
-            if parsed is not None:
-                break
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.info(
+            "teacher_model_completion elapsed_ms=%s outcome=%s timeout_seconds=%s",
+            elapsed_ms,
+            "accepted" if parsed is not None else "fallback",
+            self.response_timeout_seconds,
+        )
         if parsed is None:
             return None
         return parsed

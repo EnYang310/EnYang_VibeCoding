@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", str(ROOT_DIR / "client" / "dist" /
 VOICE_CACHE_DIR = Path(os.getenv("VOICE_CACHE_DIR", str(ROOT_DIR / "data" / "voice-cache")))
 
 app = FastAPI(title="钱程 · 理财第一课", version="1.0.0")
+logger = logging.getLogger(__name__)
 chat_limiter = SlidingWindowLimiter(limit=int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "30")), window_seconds=60)
 voice_limiter = SlidingWindowLimiter(limit=int(os.getenv("VOICE_RATE_LIMIT_PER_MINUTE", "20")), window_seconds=60)
 voice_service = TencentVoiceService(VOICE_CACHE_DIR)
@@ -153,6 +155,7 @@ async def interaction_card(request: InteractionCardRequest) -> InteractionCardRe
 async def interaction_turn(request: InteractionTurnRequest, http_request: Request) -> InteractionTurnResponse:
     if request.course_id not in COURSE_FOCUS:
         raise HTTPException(status_code=422, detail="课程或回合不存在")
+    started_at = time.perf_counter()
     try:
         # Do not trust the client to skip cards. The tool may only present the
         # direct successor of the card whose work was just submitted.
@@ -183,6 +186,12 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
             gate_passed=gate_passed,
         ):
             tool_call = InteractionCardResponse(**present_interaction_card(request.course_id, request.next_unit_id))
+        logger.info(
+            "interaction_turn elapsed_ms=%s source=%s card_ready=%s",
+            int((time.perf_counter() - started_at) * 1000),
+            feedback.source,
+            tool_call is not None,
+        )
         return InteractionTurnResponse(assistant_reply=feedback, tool_call=tool_call)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="课程或回合不存在") from exc

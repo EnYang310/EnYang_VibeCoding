@@ -22,7 +22,7 @@ def test_wechat_developer_tools_open_the_taro_output_not_a_webview_shell():
     config = json.loads((ROOT / "client" / "project.config.json").read_text(encoding="utf-8"))
     assert config["compileType"] == "miniprogram"
     assert config["miniprogramRoot"] == "dist/weapp/"
-    assert config["appid"] == "touristappid"
+    assert config["appid"] == "wx10cf06332afa9800"
     package = json.loads((ROOT / "client" / "package.json").read_text(encoding="utf-8"))
     assert "validate-weapp-api.mjs" in package["scripts"]["build:weapp"]
 

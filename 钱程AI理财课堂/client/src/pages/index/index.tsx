@@ -6,6 +6,7 @@ import { UNIT_IDS, advanceCourse, createLearningState, leaveCourse, openReviewUn
 import { readLearningHomeState } from '../../learning-storage'
 import { createLessonSession, type LessonSession } from '../../lesson-session'
 import { shouldRevealDeferredInteractionCard, type DeferredInteractionCard } from '../../deferred-interaction-card'
+import { answerReceivedMessage, answerRequestFailedMessage } from '../../teacher-turn-feedback'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
 import './index.scss'
@@ -467,8 +468,15 @@ export default function Index() {
     const sessionToken = session.token()
     const submitted = answer
     const nextUnit = course.units[progress!.unitIndex + 1]
+    const turnId = ++turnSequenceRef.current
     autoReadNextSceneRef.current = true
     lectureVoice.stop()
+    // Do not make a learner stare at a button while a long teacher turn is
+    // being generated.  This is an acknowledgement of the submitted answer,
+    // not a completed AI turn, so it never affects the card cadence.
+    setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), {
+      role: 'assistant', unitId: unit.id, text: answerReceivedMessage(), pending: true, turnId
+    }] }))
     setSubmittingInteraction(true)
     if (!nextUnit) {
       try {
@@ -489,14 +497,17 @@ export default function Index() {
         }, session)
         const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }
         if (result.statusCode >= 400 || !data.reply) throw new Error('action card feedback failed')
-        if (!session.isCurrent(sessionToken)) return
-        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.reply!, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source || 'local_fallback', teachingScene: data.teaching_scene }] }))
+        if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
+        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.reply!, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source || 'local_fallback', teachingScene: data.teaching_scene, turnId }] }))
         persist(advanceCourse(learning, course.id, { answer: submitted }))
         setAnswer('')
         setPresentedCard(null)
         setCourseChatCompleted(true)
       } catch {
-        if (session.isCurrent(sessionToken)) Taro.showToast({ title: '老师暂时没收到行动卡，请重试', icon: 'none' })
+        if (turnId === turnSequenceRef.current && session.isCurrent(sessionToken)) {
+          setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId }] }))
+          Taro.showToast({ title: '讲解没有返回，答案已保留', icon: 'none' })
+        }
       } finally {
         if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
       }
@@ -522,8 +533,8 @@ export default function Index() {
       }, session)
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.assistant_reply?.reply || (data.tool_call && (data.tool_call.tool_name !== 'present_interaction_card' || data.tool_call.unit_id !== nextUnit.id))) throw new Error('interaction turn failed')
-      if (!session.isCurrent(sessionToken)) return
-      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene }] }))
+      if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
+      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene, turnId }] }))
       if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === nextUnit.id) {
         const feedbackScene = data.assistant_reply.teaching_scene
         if (feedbackScene) {
@@ -540,7 +551,10 @@ export default function Index() {
         setAwaitingNext({ unitId: unit.id, nextUnitId: nextUnit.id, answer: submitted })
       }
     } catch {
-      if (session.isCurrent(sessionToken)) Taro.showToast({ title: '老师暂时没收到答案，请重试', icon: 'none' })
+      if (turnId === turnSequenceRef.current && session.isCurrent(sessionToken)) {
+        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId }] }))
+        Taro.showToast({ title: '讲解没有返回，答案已保留', icon: 'none' })
+      }
     } finally {
       if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
     }
@@ -618,7 +632,7 @@ export default function Index() {
         <Text className='caption-expand' onClick={() => setCaptionExpanded(true)}>展开字幕全文</Text>
       </View>
       <View className='classroom-composer'>
-        <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
+        <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
         <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
       </View>
     </View>
