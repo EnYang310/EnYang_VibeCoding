@@ -308,6 +308,65 @@ $green: #2e6d5b;
   .home-page { background: linear-gradient(180deg, #10243a 0 37%, #edf0f2 37%); }.home-page .hero-block { margin: 28px 0 20px; padding: 24px 0 38px; }.home-page .hero-title { font-size: 43px; }.home-page .resume-card { margin-top: 10px; }.home-page .section-heading { margin-top: 38px; }.home-page .course-grid { grid-template-columns: 1fr; }
 }
 
+/* Home and classroom are one product, not a dark landing page followed by a
+   different classroom.  The home now uses the same reading surface, accent,
+   spacing and type hierarchy as the course. */
+.home-page {
+  min-height: 100dvh;
+  color: var(--qc-ink);
+  background: var(--qc-bg);
+}
+.home-page .home-nav,
+.home-page .hero-block,
+.home-page .resume-card,
+.home-page .section-heading,
+.home-page .course-grid,
+.home-page .home-principle {
+  width: 100%;
+  max-width: none;
+}
+.home-page .home-nav {
+  min-height: 54px;
+  padding: 0 2px 16px;
+  border-bottom: 1px solid var(--qc-line);
+}
+.home-page .wordmark { color: var(--qc-ink); font-size: clamp(21px, 1.45vw, 28px); letter-spacing: -.06em; }
+.home-page .nav-tag { color: var(--qc-accent-dark); font-size: 14px; font-weight: 800; }
+.home-page .hero-block {
+  min-height: clamp(300px, 32vw, 480px);
+  margin: clamp(24px, 3.2vw, 58px) 0 24px;
+  padding: clamp(30px, 4.2vw, 82px);
+  border: 1px solid var(--qc-line);
+  border-left: 8px solid var(--qc-accent);
+  border-radius: 22px;
+  background: linear-gradient(120deg, #ffffff 0%, #f2faf6 62%, #e7f3ee 100%);
+  box-shadow: var(--qc-shadow);
+  color: var(--qc-ink);
+}
+.home-page .hero-block::after { content: '钱程'; right: clamp(20px, 4vw, 70px); top: auto; bottom: clamp(14px, 3vw, 44px); color: rgba(8,127,91,.08); font-size: clamp(84px, 13vw, 220px); letter-spacing: -.1em; transform: none; }
+.home-page .hero-kicker { color: var(--qc-accent-dark); font-size: 14px; font-weight: 900; }
+.home-page .hero-title { max-width: 14ch; margin: 20px 0 16px; color: var(--qc-ink); font-size: clamp(45px, 5vw, 86px); line-height: 1.04; letter-spacing: -.08em; }
+.home-page .hero-copy { max-width: 48ch; color: var(--qc-body); font-size: clamp(19px, 1.45vw, 27px); line-height: 1.7; }
+.home-page .learning-stats { gap: clamp(24px, 4vw, 68px); margin-top: clamp(28px, 4vw, 54px); padding-top: 19px; border-top: 1px solid var(--qc-line); }
+.home-page .stat-number { color: var(--qc-ink); font-size: clamp(28px, 2.2vw, 43px); }.home-page .stat-label { color: var(--qc-muted); font-size: 15px; }
+.home-page .resume-card { margin: 24px 0; padding: clamp(24px, 2.6vw, 46px); border: 1px solid var(--qc-line); border-radius: 18px; background: #fff; box-shadow: none; }
+.home-page .resume-kicker, .home-page .course-number, .home-page .section-eyebrow { color: var(--qc-accent-dark); font-size: 14px; }.home-page .resume-title { font-size: clamp(24px, 1.8vw, 34px); }.home-page .resume-meta { font-size: clamp(17px, 1.15vw, 21px); }.home-page .resume-arrow { color: var(--qc-accent); }
+.home-page .section-heading { margin-top: clamp(48px, 5vw, 86px); }.home-page .section-title { color: var(--qc-ink); font-size: clamp(32px, 2.7vw, 52px); letter-spacing: -.06em; }.home-page .section-count { font-size: 16px; }
+.home-page .course-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 1.5vw, 28px); }
+.home-page .course-card { min-height: clamp(250px, 21vw, 360px); padding: clamp(24px, 2.2vw, 42px); border: 1px solid var(--qc-line); border-radius: 16px; background: #fff; box-shadow: none; }.home-page .course-card::before { width: 5px; }.home-page .course-title { font-size: clamp(27px, 2vw, 38px); }.home-page .course-subtitle { font-size: clamp(18px, 1.2vw, 22px); line-height: 1.65; }.home-page .course-status { font-size: 14px; }.home-page .review-badge { font-size: 14px; }
+.home-page .home-principle { margin-top: 26px; padding: clamp(24px, 2.6vw, 46px); border: 1px solid var(--qc-line); border-radius: 16px; background: var(--qc-accent-wash); color: var(--qc-body); font-size: clamp(18px, 1.2vw, 22px); }.home-page .principle-title { font-size: clamp(22px, 1.6vw, 30px); }
+
+@media (max-width: 760px) {
+  .home-page .home-nav { min-height: 48px; padding: calc(10px + env(safe-area-inset-top)) 0 12px; }
+  .home-page .wordmark { font-size: 21px; }.home-page .nav-tag { font-size: 13px; }
+  .home-page .hero-block { min-height: 340px; margin: 22px 0 18px; padding: 30px 22px; border-left-width: 6px; border-radius: 14px; }
+  .home-page .hero-title { font-size: 48px; }.home-page .hero-copy { font-size: 20px; }.home-page .learning-stats { gap: 24px; }.home-page .stat-number { font-size: 31px; }.home-page .stat-label { font-size: 15px; }
+  .home-page .resume-card { padding: 23px 20px; border-radius: 14px; }.home-page .resume-title { font-size: 25px; }.home-page .resume-meta { font-size: 18px; }
+  .home-page .section-heading { margin-top: 48px; }.home-page .section-title { font-size: 34px; }
+  .home-page .course-grid { grid-template-columns: 1fr; gap: 14px; }.home-page .course-card { min-height: 244px; padding: 25px 21px; border-radius: 14px; }.home-page .course-title { font-size: 29px; }.home-page .course-subtitle { font-size: 19px; }
+  .home-page .home-principle { padding: 22px 20px; font-size: 19px; }.home-page .principle-title { font-size: 25px; }
+}
+
 @media (min-width: 761px) and (max-width: 1180px) {
   .artifact-card, .artifact-card:nth-child(3n+1) { grid-column: span 6; }.single-choice-options { grid-template-columns: 1fr 1fr; }
 }

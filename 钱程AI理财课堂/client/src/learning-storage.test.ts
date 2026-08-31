@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createLearningState } from './course-engine'
-import { hydrateLearningState } from './learning-storage'
+import { hydrateLearningState, readLearningHomeState } from './learning-storage'
 
 describe('learning state storage', () => {
   it('returns a complete six-course state for invalid or legacy data', () => {
@@ -34,5 +34,16 @@ describe('learning state storage', () => {
     expect(hydrated.activeCourseId).toBe('')
     expect(hydrated.courses.tradeoffs.unitIndex).toBe(7)
     expect(hydrated.courses.tradeoffs.reviewUnits).toEqual([2])
+  })
+
+  it('opens the application at the course home while keeping saved progress', () => {
+    const saved = createLearningState()
+    saved.activeCourseId = 'money-jobs'
+    saved.courses['money-jobs'].unitIndex = 3
+
+    const opened = readLearningHomeState(saved)
+
+    expect(opened.activeCourseId).toBe('')
+    expect(opened.courses['money-jobs'].unitIndex).toBe(3)
   })
 })

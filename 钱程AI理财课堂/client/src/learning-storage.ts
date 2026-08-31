@@ -43,3 +43,10 @@ export function hydrateLearningState(raw: unknown): LearningState {
     courses
   }
 }
+
+// Progress belongs to the learner, but a fresh app visit starts at the course
+// map rather than dropping them back into the last open classroom.
+export function readLearningHomeState(raw: unknown): LearningState {
+  const state = hydrateLearningState(raw)
+  return { ...state, activeCourseId: '' }
+}

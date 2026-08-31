@@ -3,7 +3,7 @@ import Taro from '@tarojs/taro'
 import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
 import { COURSE_CONTENT, COURSE_LIST, type CourseUnit } from '../../course-content'
 import { UNIT_IDS, advanceCourse, createLearningState, leaveCourse, openReviewUnit, restartCourse, selectCourse, skipCourseUnit, type CourseId, type LearningState } from '../../course-engine'
-import { hydrateLearningState } from '../../learning-storage'
+import { readLearningHomeState } from '../../learning-storage'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
 import './index.scss'
@@ -199,7 +199,7 @@ function useLectureVoice() {
 }
 
 const readState = (): LearningState => {
-  try { return hydrateLearningState(Taro.getStorageSync(STORAGE_KEY)) } catch { return createLearningState() }
+  try { return readLearningHomeState(Taro.getStorageSync(STORAGE_KEY)) } catch { return createLearningState() }
 }
 
 const readClassroom = (): { chatByUnit: ChatMap, cardTimeline: Record<string, PresentedCard[]> } => {
