@@ -70,6 +70,13 @@ def courseware_fallback(request: ChatRequest, *, privacy_redirect: bool = False)
             f"我们可以把它改成一个通用学习题：{COURSE_FOCUS[request.course_id]}{primary.text}"
             "先说说这笔钱最早什么时候要用，好吗？"
         )
+    elif request.context.current_card_completed:
+        submitted_answer = sanitize_user_text(request.context.current_card_answer)[:180]
+        reply = (
+            f"你刚才的选择是“{submitted_answer or '先把眼前这笔钱的用途说清楚'}”。"
+            f"老师先不急着判对错，带你用这一课的规则把它讲透：{primary.text}"
+            "把这个判断放回自己的生活里再看一次，才知道它能不能站得住。"
+        )
     else:
         opening = f"你问的是“{message or '这一点怎么理解'}”。"
         reply = f"{opening}先用一句人话抓住它：{primary.text}你可以用自己的生活情境举一个反例吗？"
@@ -123,6 +130,12 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
     if needs_compliance_redirect(request.message):
         # Real purchase, sale, allocation and product-selection questions never
         # reach the external model. The boundary is deterministic, not prompt-only.
+        return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
+    # A submitted interaction card already contains the learner's selected
+    # answer and a fixed lesson boundary.  Waiting for a large model JSON here
+    # only delays the class; the courseware teacher can immediately deliver the
+    # full explanation, components, audio, and the next-card handoff.
+    if request.context.current_card_completed:
         return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
     offer_transition = request.message.startswith("我完成了这张互动卡")
     generated = await KimiClient().lesson_chat(

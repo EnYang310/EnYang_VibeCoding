@@ -115,3 +115,29 @@ async def test_missing_key_falls_back_to_courseware_reply(monkeypatch):
     assert response.evidence_notes
     assert response.evidence_notes[0].text
     assert "推荐" not in response.reply
+
+
+@pytest.mark.asyncio
+async def test_completed_interaction_uses_the_fast_courseware_teacher_without_waiting_for_the_model(monkeypatch):
+    called = False
+
+    async def fake_lesson_chat(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("a completed card must use the immediate lesson path")
+
+    monkeypatch.setattr("app.lesson_chat.KimiClient.lesson_chat", fake_lesson_chat)
+    response = await personalized_lesson_chat(
+        ChatRequest(
+            course_id="money-jobs",
+            unit_id="initial-judgment",
+            message="我完成了这张互动卡。我的回答是：先留出下月房租。",
+            context={"current_card_completed": True, "current_card_answer": "先留出下月房租。"},
+        )
+    )
+
+    assert called is False
+    assert response.source == "local_fallback"
+    assert response.teaching_scene is not None
+    assert len(response.teaching_scene.full_caption) == 6
+    assert "自己的生活里" in response.reply
