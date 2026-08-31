@@ -5,6 +5,7 @@ import { COURSE_CONTENT, COURSE_LIST, type CourseUnit } from '../../course-conte
 import { UNIT_IDS, advanceCourse, createLearningState, leaveCourse, openReviewUnit, restartCourse, selectCourse, skipCourseUnit, type CourseId, type LearningState } from '../../course-engine'
 import { readLearningHomeState } from '../../learning-storage'
 import { createLessonSession, type LessonSession } from '../../lesson-session'
+import { shouldRevealDeferredInteractionCard, type DeferredInteractionCard } from '../../deferred-interaction-card'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isInteractionComplete } from '../../interaction-answer'
 import './index.scss'
@@ -77,6 +78,7 @@ function materializeMiniAudio(segment: VoiceSegment, index: number): string {
 
 function useLectureVoice(session: LessonSession) {
   const [status, setStatus] = useState<SpeechStatus>({ sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
+  const [settledSceneId, setSettledSceneId] = useState<string | null>(null)
   const miniAudioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null)
   // H5 uses the browser's real Audio element.  It is substantially more
   // reliable than the Taro shim for an mp3 served by the same classroom
@@ -93,6 +95,7 @@ function useLectureVoice(session: LessonSession) {
     } else {
       miniAudioRef.current?.stop()
     }
+    setSettledSceneId(null)
     setStatus({ sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
   }, [])
 
@@ -112,6 +115,7 @@ function useLectureVoice(session: LessonSession) {
     const sessionToken = session.token()
     try {
       const playbackToken = ++playbackTokenRef.current
+      setSettledSceneId(null)
       setStatus({ sceneId, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 })
       // Critical path: synthesize the first spoken paragraph only. The rest
       // starts at the same time and is queued before paragraph one finishes.
@@ -146,6 +150,7 @@ function useLectureVoice(session: LessonSession) {
             return playNext()
           }
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
+          setSettledSceneId(sceneId)
           return
         }
         const src = isWeapp
@@ -166,12 +171,14 @@ function useLectureVoice(session: LessonSession) {
           audio.onerror = () => {
             if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
             setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
+            setSettledSceneId(sceneId)
             Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
           }
           audio.src = src
           audio.play().catch(() => {
             if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
-            setStatus(current => current.sceneId === sceneId ? { ...current, paused: true } : current)
+            setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
+            setSettledSceneId(sceneId)
             Taro.showToast({ title: '浏览器阻止自动播放，点“朗读本段”即可播放', icon: 'none' })
           })
           return
@@ -190,6 +197,7 @@ function useLectureVoice(session: LessonSession) {
         audio.onError(() => {
           if (!session.isCurrent(sessionToken) || playbackToken !== playbackTokenRef.current) return
           setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
+          setSettledSceneId(sceneId)
           Taro.showToast({ title: '这段朗读播放失败，请重试', icon: 'none' })
         })
         audio.src = src
@@ -199,6 +207,7 @@ function useLectureVoice(session: LessonSession) {
     } catch (error) {
       if (!session.isCurrent(sessionToken)) return
       setStatus(current => current.sceneId === sceneId ? { sceneId: null, paused: false, subtitles: [], activeIndex: -1, paragraphIndex: -1 } : current)
+      setSettledSceneId(sceneId)
       Taro.showToast({ title: error instanceof Error ? error.message : '朗读暂时不可用', icon: 'none' })
       return
     }
@@ -209,7 +218,7 @@ function useLectureVoice(session: LessonSession) {
     webAudioRef.current?.pause()
   }, [])
 
-  return { status, toggle, stop }
+  return { status, settledSceneId, toggle, stop }
 }
 
 const readState = (): LearningState => {
@@ -237,6 +246,7 @@ export default function Index() {
   const [sending, setSending] = useState(false)
   const [submittingInteraction, setSubmittingInteraction] = useState(false)
   const [presentedCard, setPresentedCard] = useState<PresentedCard | null>(null)
+  const [deferredCard, setDeferredCard] = useState<DeferredInteractionCard<PresentedCard> | null>(null)
   const [cardLoading, setCardLoading] = useState(false)
   const [awaitingNext, setAwaitingNext] = useState<AwaitingNext | null>(null)
   const [courseChatCompleted, setCourseChatCompleted] = useState(false)
@@ -256,6 +266,7 @@ export default function Index() {
   const chatKey = course ? course.id : ''
   const chat = chatKey ? (chatByUnit[chatKey] || []) : []
   const activeCardId = course && progress && presentedCard?.unit_id === unit?.id ? `active-card-${course.id}-${progress.unitIndex}` : ''
+  const waitingForNextCard = Boolean(deferredCard)
 
   useEffect(() => {
     if (!course || !presentedCard || presentedCard.course_id !== course.id) return
@@ -286,6 +297,7 @@ export default function Index() {
     setCardLoading(false)
     setAwaitingNext(null)
     setPresentedCard(null)
+    setDeferredCard(null)
     setCaptionExpanded(false)
     setChatDraft('')
     setCourseChatCompleted(false)
@@ -350,6 +362,17 @@ export default function Index() {
     return () => { cancelled = true }
   }, [course?.id, unit?.id, progress?.unitIndex, progress?.completed, progress?.reviewingUnit, presentedCard?.course_id, presentedCard?.unit_id])
 
+  useEffect(() => {
+    if (!course || !shouldRevealDeferredInteractionCard(deferredCard, lectureVoice.settledSceneId)) return
+    const nextCard = deferredCard.card
+    const submittedAnswer = deferredCard.answer
+    setDeferredCard(null)
+    setPresentedCard(nextCard)
+    persist(advanceCourse(learning, course.id, { answer: submittedAnswer }))
+    setAnswer('')
+    setAwaitingNext(null)
+  }, [course?.id, deferredCard, lectureVoice.settledSceneId, learning])
+
   const startCourse = (courseId: CourseId) => {
     closeVisibleLesson()
     const target = learning.courses[courseId]
@@ -378,7 +401,7 @@ export default function Index() {
 
   const sendChat = async () => {
     const message = chatDraft.trim()
-    if (!message || !course || !unit || !progress || sending) return
+    if (!message || !course || !unit || !progress || sending || waitingForNextCard) return
     const session = lessonSessionRef.current
     const sessionToken = session.token()
     const turnId = ++turnSequenceRef.current
@@ -416,10 +439,15 @@ export default function Index() {
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
       setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', text: data.reply!, unitId: unit.id, turnId, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source, teachingScene: data.teaching_scene }] }))
       if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === course.units[progress.unitIndex + 1]?.id) {
-        setPresentedCard(data.tool_call)
-        persist(advanceCourse(learning, course.id, { answer: awaitingNext?.unitId === unit.id ? awaitingNext.answer : answer }))
-        setAnswer('')
-        setAwaitingNext(null)
+        const submittedAnswer = awaitingNext?.unitId === unit.id ? awaitingNext.answer : answer
+        if (data.teaching_scene) {
+          setDeferredCard({ sceneId: sceneVoiceId(unit.id, data.teaching_scene), card: data.tool_call, answer: submittedAnswer })
+        } else {
+          setPresentedCard(data.tool_call)
+          persist(advanceCourse(learning, course.id, { answer: submittedAnswer }))
+          setAnswer('')
+          setAwaitingNext(null)
+        }
       }
     } catch {
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
@@ -497,10 +525,15 @@ export default function Index() {
       if (!session.isCurrent(sessionToken)) return
       setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene }] }))
       if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === nextUnit.id) {
-        setPresentedCard(data.tool_call)
-        persist(advanceCourse(learning, course.id, { answer: submitted }))
-        setAnswer('')
-        setAwaitingNext(null)
+        const feedbackScene = data.assistant_reply.teaching_scene
+        if (feedbackScene) {
+          setDeferredCard({ sceneId: sceneVoiceId(unit.id, feedbackScene), card: data.tool_call, answer: submitted })
+        } else {
+          setPresentedCard(data.tool_call)
+          persist(advanceCourse(learning, course.id, { answer: submitted }))
+          setAnswer('')
+          setAwaitingNext(null)
+        }
       } else {
         // The learner can freely chat here. The next question will appear only
         // after the teaching gate judges the current idea to be solid enough.
@@ -577,7 +610,7 @@ export default function Index() {
           <LessonMessages messages={messagesFor(card.unit_id)} voice={lectureVoice} />
         </View>
         })}
-        {cardLoading && <View className='stage-loading'><Text>程老师正在准备下一个学习环节…</Text></View>}
+        {(cardLoading || waitingForNextCard) && <View className='stage-loading'><Text>{waitingForNextCard ? '本段讲解结束后，下一道题会出现。' : '程老师正在准备下一个学习环节…'}</Text></View>}
       </ScrollView>
       <View className='caption-dock'>
         {lectureVoice.status.sceneId && <View className='caption-pause' onClick={() => lectureVoice.toggle(lectureVoice.status.sceneId!, [])}><Text>{lectureVoice.status.paused ? '▶' : 'Ⅱ'}</Text></View>}
@@ -585,8 +618,8 @@ export default function Index() {
         <Text className='caption-expand' onClick={() => setCaptionExpanded(true)}>展开字幕全文</Text>
       </View>
       <View className='classroom-composer'>
-        <View className='chat-compose'><Input value={chatDraft} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder='随时问程老师：解释、反驳、举例都可以…' /><Button disabled={sending || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
-        <Text className='chat-tip'>{freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
+        <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
+        <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
       </View>
     </View>
     {captionExpanded && <View className='caption-sheet'><View className='caption-sheet-inner'><Text className='caption-sheet-label'>本课讲解全文 · 已累计 {lectureScenes.length} 段</Text>{(lectureScenes.length > 0 ? lectureScenes : [scene]).map((lecture, sceneIndex) => <View key={`${lecture.screen_title}-${sceneIndex}`} className='caption-lesson'><Text className='caption-sheet-title'>{lecture.screen_title}</Text>{lecture.full_caption.map((paragraph, index) => <Text className='caption-paragraph' key={`${paragraph}-${index}`}>{paragraph}</Text>)}</View>)}<Button className='secondary-action caption-close' onClick={() => setCaptionExpanded(false)}>返回继续听</Button></View></View>}

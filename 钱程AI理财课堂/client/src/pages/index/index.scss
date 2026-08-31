@@ -1074,3 +1074,37 @@ $green: #2e6d5b;
   .submission-hint { font-size: clamp(17px, 1.1vw, 22px); }
   .chat-tip { font-size: clamp(16px, 1vw, 20px); }
 }
+
+/* Reading copy is the lesson itself.  It deliberately occupies the card at a
+   similar visual weight to its title instead of leaving vast empty panels. */
+@media (max-width: 760px) {
+  .course-start-copy,
+  .course-start-focus,
+  .card-teacher-intro { font-size: 23px; line-height: 1.7; }
+  .scene-summary { font-size: 25px; line-height: 1.7; }
+  .artifact-lead,
+  .artifact-note,
+  .artifact-step,
+  .artifact-plain-items,
+  .timeline-artifact-row,
+  .contrast-column { font-size: 25px; line-height: 1.68; }
+  .choice-context { font-size: 22px; line-height: 1.65; }
+  .caption-short,
+  .caption-synced { font-size: 21px; line-height: 1.62; }
+}
+
+@media (min-width: 761px) {
+  .course-start-copy,
+  .course-start-focus,
+  .card-teacher-intro { font-size: clamp(25px, 1.55vw, 31px); line-height: 1.7; }
+  .scene-summary { font-size: clamp(24px, 1.5vw, 30px); line-height: 1.72; }
+  .artifact-lead,
+  .artifact-note,
+  .artifact-step,
+  .artifact-plain-items,
+  .timeline-artifact-row,
+  .contrast-column { font-size: clamp(25px, 1.55vw, 31px); line-height: 1.7; }
+  .choice-context { font-size: clamp(23px, 1.4vw, 29px); line-height: 1.66; }
+  .caption-short,
+  .caption-synced { font-size: clamp(22px, 1.35vw, 27px); line-height: 1.64; }
+}

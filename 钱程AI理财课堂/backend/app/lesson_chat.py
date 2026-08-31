@@ -8,7 +8,7 @@ from app.kimi import KimiClient
 from app.lesson_runtime import COURSE_FOCUS, UNIT_IDS, UNIT_TITLES
 from app.learning_gates import criteria_for
 from app.schemas import ChatRequest, ChatResponse, EvidenceNote, TeachingArtifact, TeachingScene
-from app.teaching_flow import append_course_finished_closing
+from app.teaching_flow import append_course_finished_closing, append_follow_up_hook
 
 
 REAL_DECISION_TERMS = (
@@ -45,10 +45,12 @@ def needs_compliance_redirect(message: str) -> bool:
 
 
 def finish_free_question_mode(response: ChatResponse, *, course_finished: bool) -> ChatResponse:
-    if not course_finished:
-        return response
-    room_for_reply = 400 - len(append_course_finished_closing("")) - 1
-    return response.model_copy(update={"reply": append_course_finished_closing(response.reply[:room_for_reply])})
+    if course_finished:
+        room_for_reply = 400 - len(append_course_finished_closing("")) - 1
+        return response.model_copy(update={"reply": append_course_finished_closing(response.reply[:room_for_reply])})
+    hook = response.next_step_invitation or "想把它放进自己的生活里，再追问一个最想弄明白的地方吗？"
+    room_for_reply = 400 - len(hook) - 1
+    return response.model_copy(update={"reply": append_follow_up_hook(response.reply[:room_for_reply], hook)})
 
 
 def courseware_fallback(request: ChatRequest, *, privacy_redirect: bool = False) -> ChatResponse:

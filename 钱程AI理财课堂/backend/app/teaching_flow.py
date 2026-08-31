@@ -53,3 +53,16 @@ def append_course_finished_closing(reply: str) -> str:
     if COURSE_FINISHED_CLOSING in cleaned:
         return cleaned
     return f"{cleaned.rstrip('。！？!?')}。{COURSE_FINISHED_CLOSING}"
+
+
+def append_follow_up_hook(reply: str, hook: str) -> str:
+    """End a normal teaching turn with one concrete invitation to continue.
+
+    The final action-card turn deliberately uses ``append_course_finished_closing``
+    instead, so the lesson can land instead of manufacturing another prompt.
+    """
+    cleaned_reply = reply.strip().rstrip("。！？!?")
+    cleaned_hook = hook.strip()
+    if not cleaned_hook or cleaned_hook in cleaned_reply:
+        return cleaned_reply + "。"
+    return f"{cleaned_reply}。{cleaned_hook}"

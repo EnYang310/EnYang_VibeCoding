@@ -2,6 +2,7 @@ from app.teaching_flow import (
     COURSE_FINISHED_CLOSING,
     MAX_ASSISTANT_REPLIES_BETWEEN_CARDS,
     append_course_finished_closing,
+    append_follow_up_hook,
     has_dense_artifact_cadence,
     has_short_caption_beats,
     should_present_next_card,
@@ -55,3 +56,8 @@ def test_caption_beats_are_limited_to_two_or_three_sentences():
 def test_final_card_reply_always_closes_the_course_into_free_questions():
     reply = append_course_finished_closing("你把用途、日期和下一步连起来了。")
     assert COURSE_FINISHED_CLOSING in reply
+
+
+def test_normal_teacher_reply_always_ends_with_a_specific_follow_up_hook():
+    reply = append_follow_up_hook("先把这笔钱的用途和日期分开看。", "先想想这笔钱最早什么时候必须用。")
+    assert reply.endswith("先想想这笔钱最早什么时候必须用。")
