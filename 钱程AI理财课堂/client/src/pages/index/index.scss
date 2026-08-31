@@ -479,23 +479,53 @@ $green: #2e6d5b;
 }
 
 @media (max-width: 620px) {
-  .lesson-page { width: 100%; padding: 0 0 calc(18px + env(safe-area-inset-bottom)); }
+  /* Phone is the primary classroom: keep a generous reading scale instead
+     of shrinking the lesson board into a desktop preview. */
+  .lesson-page { width: 100%; padding: 0 0 calc(12px + env(safe-area-inset-bottom)); -webkit-text-size-adjust: 100%; }
   .lesson-page .topbar, .lesson-page .unit-progress, .lesson-page .classroom-title { margin-left: 16px; margin-right: 16px; }
-  .lesson-page .topbar { padding-top: calc(18px + env(safe-area-inset-top)); }
-  .teaching-stage { height: calc(100svh - 128px); min-height: 480px; border-radius: 0; border-left: 0; border-right: 0; }
+  .lesson-page .topbar { min-height: 48px; padding-top: calc(18px + env(safe-area-inset-top)); }
+  .lesson-page .wordmark { font-size: 19px; }
+  .lesson-page .lesson-position, .lesson-page .text-button { font-size: 13px; }
+  .lesson-page .classroom-title { margin-top: 18px; margin-bottom: 15px; }
+  .lesson-page .eyebrow { font-size: 12px; }
+  .lesson-page .lesson-title { max-width: none; font-size: 36px; line-height: 1.1; }
+  .teaching-stage { height: calc(100svh - 210px); min-height: 430px; border-radius: 0; border-left: 0; border-right: 0; display: flex; flex-direction: column; }
+  .classroom-transcript { height: auto; flex: 1; min-height: 0; }
   .teaching-stage .course-start-card { margin: 12px 14px; }
+  .course-start-card .teacher-line, .teacher-line, .choice-label { font-size: 12px; }
+  .course-start-title { font-size: 23px; }
+  .course-start-copy, .course-start-focus, .card-teacher-intro, .choice-context { font-size: 15px; line-height: 1.72; }
   .teaching-scene-message, .timeline-turn { margin-left: 14px; margin-right: 14px; }
+  .teaching-scene-message { padding: 20px 17px; }
+  .scene-title { font-size: 32px; }
+  .scene-summary { font-size: 16px; }
+  .artifact-title { font-size: 23px; }
+  .artifact-lead, .artifact-note, .artifact-step, .artifact-plain-items, .timeline-artifact-row, .contrast-column { font-size: 15px; }
   .stage-lesson { padding: 28px 20px 12px; text-align: left; }
   .stage-summary { margin-left: 0; }
   .key-point-grid, .single-choice-options, .teaching-contrast { grid-template-columns: 1fr; }
   .key-point-card { min-height: auto; padding: 12px 14px; }
   .key-point-number { display: inline-block; margin: 0 8px 0 0; }
-  .stage-question-card { margin: 10px 14px 20px; padding: 17px; }
-  .single-choice-option { min-height: 58px; }
+  .stage-question-card { margin: 10px 14px 20px; padding: 20px 17px; }
+  .choice-question { font-size: 24px; line-height: 1.42; }
+  .single-choice-option { min-height: 66px; padding: 15px; font-size: 17px; }
+  .choice-index { font-size: 14px; }
+  .stage-confirm { min-height: 60px; font-size: 20px!important; }
+  .submission-hint { font-size: 14px; }
   .caption-dock { position: sticky; bottom: 0; padding: 12px 14px; }
-  .caption-short { font-size: 13px; }
-  .caption-synced { font-size: 13px; }
-  .caption-expand { white-space: nowrap; font-size: 12px; }
+  .caption-short { font-size: 15px; line-height: 1.55; }
+  .caption-synced { font-size: 15px; line-height: 1.55; }
+  .caption-expand { white-space: nowrap; font-size: 13px; }
+  .teaching-stage .classroom-composer { padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .chat-compose input { min-height: 48px; font-size: 16px; }
+  .chat-compose button { width: 72px; min-height: 48px; font-size: 16px; }
   .caption-sheet-inner { padding: 24px 20px; border-radius: 22px; }
-  .caption-paragraph { font-size: 17px; line-height: 1.82; }
+  .caption-paragraph { font-size: 18px; line-height: 1.82; }
+}
+
+@media (min-width: 621px) {
+  .lesson-page .teacher-line, .lesson-page .choice-label { font-size: clamp(13px, .9vw, 16px); }
+  .lesson-page .course-start-copy, .lesson-page .course-start-focus, .lesson-page .card-teacher-intro, .lesson-page .choice-context, .lesson-page .scene-summary { font-size: clamp(17px, 1.25vw, 23px); }
+  .lesson-page .single-choice-option { font-size: clamp(18px, 1.3vw, 24px); }
+  .lesson-page .artifact-lead, .lesson-page .artifact-note, .lesson-page .artifact-step, .lesson-page .artifact-plain-items, .lesson-page .timeline-artifact-row, .lesson-page .contrast-column { font-size: clamp(16px, 1.15vw, 21px); }
 }
