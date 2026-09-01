@@ -36,6 +36,8 @@ type ChatMessage = {
   evidenceIds?: string[]
   evidenceNotes?: EvidenceNote[]
   source?: 'kimi' | 'local_fallback' | 'connection_error'
+  retryMessage?: string
+  retryKind?: 'chat' | 'interaction'
   teachingScene?: TeachingScene
 }
 type ChatMap = Record<string, ChatMessage[]>
@@ -49,28 +51,42 @@ type VoiceSegment = { audio_url: string, audio_base64?: string, subtitles: Voice
 type SpeechStatus = { sceneId: string | null, paused: boolean, subtitles: VoiceSubtitle[], activeIndex: number, paragraphIndex: number }
 
 type ApiResult<T> = { data: T, statusCode: number }
+type AbortableApiRequest<T> = Promise<ApiResult<T>> & { abort: () => void }
 const isWeapp = process.env.TARO_ENV === 'weapp'
+const MODEL_REQUEST_TIMEOUT_MS = 90_000
 
 // H5 keeps same-origin HTTP requests. The mini program uses CloudBase's
 // private WeChat-to-container channel, which is why no request-domain entry
 // is needed in the WeChat public platform console.
-function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown, session?: LessonSession): Promise<ApiResult<T>> {
+function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown, session?: LessonSession): AbortableApiRequest<T> {
   if (isWeapp) {
     const cloud = (globalThis as typeof globalThis & { wx?: { cloud?: { callContainer: (options: Record<string, unknown>) => Promise<{ data: T }> } } }).wx?.cloud
     if (!cloud) throw new Error('请在微信开发者工具中启用云开发环境')
-    const request = cloud.callContainer({
+    const task = cloud.callContainer({
       config: { env: CLOUDBASE_ENV_ID },
       path,
       method,
       data,
       header: { 'X-WX-SERVICE': CLOUDBASE_SERVICE, 'content-type': 'application/json' }
     })
-    session?.track(request)
-    return request.then(result => ({ data: result.data, statusCode: 200 }))
+    // callContainer currently exposes a promise instead of a request task.
+    // Keep the same cancellable shape so retries can still invalidate stale UI.
+    const request = Object.assign(task.then(result => ({ data: result.data, statusCode: 200 })), { abort: () => undefined })
+    return session ? session.track(request) : request
   }
-  const request = Taro.request<T>({ url: `${API_BASE}${path}`, method, data })
-  session?.track(request)
-  return request
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), MODEL_REQUEST_TIMEOUT_MS)
+  const request = fetch(`${API_BASE}${path}`, {
+    method,
+    headers: data === undefined ? undefined : { 'content-type': 'application/json' },
+    body: data === undefined ? undefined : JSON.stringify(data),
+    signal: controller.signal,
+  }).then(async response => {
+    const responseData = await response.json().catch(() => ({}))
+    return { data: responseData as T, statusCode: response.status }
+  }).finally(() => clearTimeout(timeout))
+  const abortable = Object.assign(request, { abort: () => controller.abort() })
+  return session ? session.track(abortable) : abortable
 }
 
 function materializeMiniAudio(segment: VoiceSegment, index: number): string {
@@ -269,6 +285,8 @@ export default function Index() {
   const openingRequestRef = useRef('')
   const autoReadNextSceneRef = useRef(false)
   const turnSequenceRef = useRef(0)
+  const activeChatRequestRef = useRef<AbortableApiRequest<unknown> | null>(null)
+  const activeInteractionRequestRef = useRef<AbortableApiRequest<unknown> | null>(null)
   const lessonSessionRef = useRef<LessonSession>(createLessonSession())
   const lectureVoice = useLectureVoice(lessonSessionRef.current)
   const course = learning.activeCourseId ? COURSE_CONTENT[learning.activeCourseId] : null
@@ -309,6 +327,8 @@ export default function Index() {
 
   const closeVisibleLesson = useCallback(() => {
     lessonSessionRef.current.close()
+    activeChatRequestRef.current = null
+    activeInteractionRequestRef.current = null
     turnSequenceRef.current += 1
     openingRequestRef.current = ''
     autoReadNextSceneRef.current = false
@@ -399,7 +419,7 @@ export default function Index() {
     setAnswer(target.answers[target.unitIndex] || (target.unitIndex === 7 ? target.actionCard : ''))
     persist(selectCourse(learning, courseId))
   }
-  const goHome = () => { closeVisibleLesson(); setAnswer(''); persist(leaveCourse(learning)) }
+  const goHome = () => { closeVisibleLesson(); activeChatRequestRef.current = null; activeInteractionRequestRef.current = null; setAnswer(''); persist(leaveCourse(learning)) }
 
   const restart = () => {
     if (!course) return
@@ -420,22 +440,32 @@ export default function Index() {
     })
   }
 
-  const sendChat = async () => {
-    const message = chatDraft.trim()
-    if (!message || !course || !unit || !progress || sending || waitingForNextCard) return
+  const sendChat = async (retry?: { message: string, originalTurnId: number }) => {
+    const message = (retry?.message || chatDraft).trim()
+    if (!message || !course || !unit || !progress || waitingForNextCard || (sending && !retry)) return
+    if (retry) {
+      lessonSessionRef.current.cancel(activeChatRequestRef.current)
+      activeChatRequestRef.current = null
+    }
     const session = lessonSessionRef.current
     const sessionToken = session.token()
     const turnId = ++turnSequenceRef.current
-    const userMessage: ChatMessage = { role: 'user', text: message, unitId: unit.id, turnId }
     const pendingMessage: ChatMessage = { role: 'assistant', text: '程老师正在整理这一段讲解…', unitId: unit.id, pending: true, turnId }
-    const previous = chat
+    const userMessage: ChatMessage = { role: 'user', text: message, unitId: unit.id, turnId }
+    const previous = retry ? chat.filter(item => item.turnId !== retry.originalTurnId) : chat
     autoReadNextSceneRef.current = true
     lectureVoice.stop()
     setChatDraft('')
-    setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), userMessage, pendingMessage] }))
+    setChatByUnit(current => ({
+      ...current,
+      [chatKey]: retry
+        ? [...(current[chatKey] || []).filter(item => item.turnId !== retry.originalTurnId || item.role !== 'assistant'), pendingMessage]
+        : [...(current[chatKey] || []), userMessage, pendingMessage]
+    }))
     setSending(true)
+    let request: AbortableApiRequest<unknown> | null = null
     try {
-      const result = await apiRequest<{ reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }>('/api/v1/lessons/chat', 'POST', {
+      request = apiRequest<{ reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }>('/api/v1/lessons/chat', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
           message,
@@ -455,6 +485,8 @@ export default function Index() {
             free_chat_mode: freeQuestionMode
           }
       }, session)
+      activeChatRequestRef.current = request
+      const result = await request
       const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !data.reply) throw new Error('chat request failed')
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
@@ -472,10 +504,16 @@ export default function Index() {
       }
     } catch {
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
-      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', text: `这次没连上老师，但主线先别丢：${course.focus}。你可以稍后再问，或者先回到刚才的生活情境想一想。`, unitId: unit.id, turnId, evidenceIds: [], source: 'connection_error' }] }))
+      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', text: 'LLM思考超时，请重试。', unitId: unit.id, turnId, evidenceIds: [], source: 'connection_error', retryMessage: message }] }))
     } finally {
+      if (activeChatRequestRef.current === request) activeChatRequestRef.current = null
       if (session.isCurrent(sessionToken)) setSending(false)
     }
+  }
+
+  const retryChat = (message: ChatMessage) => {
+    if (!message.retryMessage || message.turnId === undefined) return
+    void sendChat({ message: message.retryMessage, originalTurnId: message.turnId })
   }
 
   const messagesFor = (unitId: string) => chat.filter(item => item.unitId === unitId)
@@ -483,11 +521,15 @@ export default function Index() {
   const answerConfirmed = awaitingNext?.unitId === unit?.id
   const canContinue = Boolean(unit && presentedCard?.unit_id === unit.id) && isInteractionComplete(unit!, answer) && !answerConfirmed
 
-  const continueLesson = async () => {
-    if (!course || !unit || !canContinue || submittingInteraction || freeQuestionMode) return
+  const continueLesson = async (retry?: { originalTurnId: number }) => {
+    if (!course || !unit || ((!canContinue || submittingInteraction || freeQuestionMode) && !retry)) return
+    if (retry) {
+      lessonSessionRef.current.cancel(activeInteractionRequestRef.current)
+      activeInteractionRequestRef.current = null
+    }
     const session = lessonSessionRef.current
     const sessionToken = session.token()
-    const submitted = answer
+    const submitted = retry ? (awaitingNext?.answer || answer) : answer
     const nextUnit = course.units[progress!.unitIndex + 1]
     const turnId = ++turnSequenceRef.current
     if (nextUnit) setAwaitingNext({ unitId: unit.id, nextUnitId: nextUnit.id, answer: submitted })
@@ -496,13 +538,14 @@ export default function Index() {
     // Do not make a learner stare at a button while a long teacher turn is
     // being generated.  This is an acknowledgement of the submitted answer,
     // not a completed AI turn, so it never affects the card cadence.
-    setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []), {
-      role: 'assistant', unitId: unit.id, text: answerReceivedMessage(), pending: true, turnId
-    }] }))
+    setChatByUnit(current => ({ ...current, [chatKey]: [
+      ...(retry ? (current[chatKey] || []).filter(item => item.turnId !== retry.originalTurnId || item.role !== 'assistant') : (current[chatKey] || [])),
+      { role: 'assistant', unitId: unit.id, text: answerReceivedMessage(), pending: true, turnId }
+    ] }))
     setSubmittingInteraction(true)
     if (!nextUnit) {
       try {
-        const result = await apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
+        const request = apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
           next_unit_id: '',
@@ -521,6 +564,8 @@ export default function Index() {
             free_chat_mode: false
           }
         }, session)
+        activeInteractionRequestRef.current = request
+        const result = await request
         const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
         if (result.statusCode >= 400 || !hasTeacherFeedback(data)) throw new Error('action card feedback failed')
         if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
@@ -531,16 +576,17 @@ export default function Index() {
         setCourseChatCompleted(true)
       } catch {
         if (turnId === turnSequenceRef.current && session.isCurrent(sessionToken)) {
-          setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId }] }))
+          setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId, retryKind: 'interaction' }] }))
           Taro.showToast({ title: '讲解没有返回，答案已保留', icon: 'none' })
         }
       } finally {
+        activeInteractionRequestRef.current = null
         if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
       }
       return
     }
     try {
-      const result = await apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
+      const request = apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
           next_unit_id: nextUnit.id,
@@ -559,6 +605,8 @@ export default function Index() {
             free_chat_mode: false
           }
       }, session)
+      activeInteractionRequestRef.current = request
+      const result = await request
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
       if (result.statusCode >= 400 || !hasTeacherFeedback(data)) throw new Error('interaction turn failed')
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
@@ -581,12 +629,21 @@ export default function Index() {
       }
     } catch {
       if (turnId === turnSequenceRef.current && session.isCurrent(sessionToken)) {
-        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId }] }))
+        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: answerRequestFailedMessage(), source: 'connection_error', turnId, retryKind: 'interaction' }] }))
         Taro.showToast({ title: '讲解没有返回，答案已保留', icon: 'none' })
       }
     } finally {
+      activeInteractionRequestRef.current = null
       if (session.isCurrent(sessionToken)) setSubmittingInteraction(false)
     }
+  }
+
+  const retryTeacherReply = (message: ChatMessage) => {
+    if (message.retryKind === 'interaction' && message.turnId !== undefined) {
+      void continueLesson({ originalTurnId: message.turnId })
+      return
+    }
+    retryChat(message)
   }
 
   const enterNextScene = () => {
@@ -643,10 +700,10 @@ export default function Index() {
   return <View className='page lesson-page' style={{ '--course-accent': course.color } as React.CSSProperties}>
   <View className='topbar'>
       <View className='topbar-brand'>
-        <Text className='back-button' onClick={goHome}>‹</Text>
+        <Button className='back-button' aria-label='返回首页' onClick={goHome}>←</Button>
         <Text className='wordmark' onClick={goHome}>钱程</Text>
       </View>
-      <Text className='lesson-position'>{course.number} / 06</Text>
+      <Text className='lesson-position'>{course.number} / {String(COURSE_LIST.length).padStart(2, '0')}</Text>
       <Text className='text-button' onClick={goHome}>课程地图</Text>
     </View>
 
@@ -658,7 +715,7 @@ export default function Index() {
     <View className='teaching-stage transcript-stage'>
       <ScrollView scrollY className='classroom-transcript'>
         <CourseStartCard course={course} />
-        <LessonMessages messages={messagesFor('opening')} voice={lectureVoice} />
+        <LessonMessages messages={messagesFor('opening')} voice={lectureVoice} onRetry={retryTeacherReply} />
         {cards.map(card => {
         const cardUnit = course.units.find(item => item.id === card.unit_id)
         if (!cardUnit) return null
@@ -670,7 +727,7 @@ export default function Index() {
             <Text className={`submission-hint ${canContinue ? 'ready' : ''}`}>{completionHint(cardUnit, answer)}</Text>
             <Button className='primary-action stage-confirm' disabled={!canContinue || submittingInteraction || freeQuestionMode} onClick={continueLesson}>{submittingInteraction ? '程老师正在准备讲解…' : '确认作答，听程老师讲解'}</Button>
           </View> : <HistoricChoiceCard unit={cardUnit} answer={progress.answers[course.units.indexOf(cardUnit)]} />}
-          <LessonMessages messages={messagesFor(card.unit_id)} voice={lectureVoice} />
+          <LessonMessages messages={messagesFor(card.unit_id)} voice={lectureVoice} onRetry={retryTeacherReply} />
         </View>
         })}
         {(cardLoading || waitingForNextCard) && <View className='stage-loading'><Text>{waitingForNextCard ? '本段讲解结束后，下一道题会出现。' : '程老师正在准备下一个学习环节…'}</Text></View>}
@@ -682,7 +739,7 @@ export default function Index() {
           <Text className='caption-expand' onClick={() => setCaptionExpanded(true)}>展开字幕全文</Text>
         </View>
         <View className='classroom-composer'>
-          <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
+          <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={() => void sendChat()} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={() => void sendChat()}>{sending ? '…' : '发送'}</Button></View>
           {!freeQuestionMode && progress.unitIndex < course.units.length - 1 && <Button className='next-scene-button' disabled={cardLoading} onClick={enterNextScene}>进入下一场景</Button>}
           <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '不想继续等时，可以直接进入下一场景；未作答的题会保留为待回看。'}</Text>
         </View>
@@ -758,13 +815,14 @@ function TeachingArtifactCard({ artifact }: { artifact: TeachingArtifact }) {
   return <View className={`artifact-card artifact-${artifact.kind}`}><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}{artifact.items.length > 0 && <View className='artifact-plain-items'>{artifact.items.map((item, itemIndex) => <Text key={`${item}-${itemIndex}`}>• {item}</Text>)}</View>}{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
 }
 
-function LessonMessages({ messages, voice }: { messages: ChatMessage[], voice: ReturnType<typeof useLectureVoice> }) {
+function LessonMessages({ messages, voice, onRetry }: { messages: ChatMessage[], voice: ReturnType<typeof useLectureVoice>, onRetry: (message: ChatMessage) => void }) {
   return <>{messages.map((message, index) => <View key={`${message.unitId}-${message.role}-${index}`}>
     {message.pending && <View className='chat-bubble assistant thinking'><Text>{message.text}</Text><Text className='thinking-dots'>···</Text></View>}
     {!message.pending && message.role === 'assistant' && message.teachingScene && <TeachingSceneMessage message={message} voice={voice} />}
     {!message.pending && !message.teachingScene && <View className={`chat-bubble ${message.role}`}>
       {message.role === 'assistant' && <Text className={`source-badge ${message.source || 'connection_error'}`}>{message.source === 'kimi' ? 'Kimi 个性讲解' : message.source === 'local_fallback' ? '课件安全模式' : '连接提示'}</Text>}
       <Text>{message.text}</Text>
+      {message.role === 'assistant' && message.retryMessage && <Button className='retry-answer-button' onClick={() => onRetry(message)}>重新生成回答</Button>}
       {message.role === 'assistant' && message.evidenceNotes && message.evidenceNotes.length > 0 && <View className='evidence-box'><Text className='evidence-title'>本课依据</Text>{message.evidenceNotes.map(note => <View key={note.evidence_id} className='evidence-item'><Text className='evidence-id'>{note.evidence_id}</Text><Text>{note.text}</Text></View>)}</View>}
     </View>}
   </View>)}</>

@@ -111,6 +111,8 @@ class VoiceSegment(BaseModel):
 
 class VoiceSynthesisResponse(BaseModel):
     segments: list[VoiceSegment] = Field(min_length=1, max_length=12)
+    provider: Literal["tencent"] = "tencent"
+    voice_type: int = Field(gt=0)
 
 
 class ChatResponse(BaseModel):

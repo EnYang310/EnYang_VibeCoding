@@ -33,4 +33,18 @@ describe('lesson session', () => {
 
     expect(abort).not.toHaveBeenCalled()
   })
+
+  it('cancels one specific in-flight request without invalidating the whole lesson', () => {
+    const session = createLessonSession()
+    const abort = vi.fn()
+    const pending = new Promise<void>(() => undefined)
+    const token = session.token()
+    const request = Object.assign(pending, { abort })
+
+    session.track(request)
+    session.cancel(request)
+
+    expect(abort).toHaveBeenCalledOnce()
+    expect(session.isCurrent(token)).toBe(true)
+  })
 })

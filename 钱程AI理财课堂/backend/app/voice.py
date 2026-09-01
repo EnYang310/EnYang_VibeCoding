@@ -16,6 +16,10 @@ class TencentVoiceService:
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def voice_type(self) -> int:
+        return int(os.getenv("TENCENT_TTS_VOICE_TYPE", "101001"))
+
     def synthesize_paragraphs(self, paragraphs: list[str]) -> list[VoiceSegment]:
         secret_id = os.getenv("TENCENT_SECRET_ID", "").strip()
         secret_key = os.getenv("TENCENT_SECRET_KEY", "").strip()
@@ -30,7 +34,7 @@ class TencentVoiceService:
         except ImportError as exc:
             raise VoiceUnavailableError("服务端缺少腾讯云 TTS SDK") from exc
 
-        voice_type = int(os.getenv("TENCENT_TTS_VOICE_TYPE", "101001"))
+        voice_type = self.voice_type
         client = tts_client.TtsClient(
             credential.Credential(secret_id, secret_key),
             os.getenv("TENCENT_TTS_REGION", "ap-guangzhou"),

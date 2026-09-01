@@ -220,7 +220,8 @@ async def synthesize_voice(request: VoiceSynthesisRequest, http_request: Request
             http_request,
             asyncio.to_thread(voice_service.synthesize_paragraphs, request.paragraphs),
         )
-        return VoiceSynthesisResponse(segments=segments)
+        logger.info("voice_synthesis provider=tencent voice_type=%s segments=%s", voice_service.voice_type, len(segments))
+        return VoiceSynthesisResponse(segments=segments, provider="tencent", voice_type=voice_service.voice_type)
     except VoiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ClientDisconnected as exc:

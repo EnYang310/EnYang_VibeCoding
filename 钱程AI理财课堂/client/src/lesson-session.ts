@@ -19,6 +19,10 @@ export function createLessonSession() {
       )
       return request
     },
+    cancel: (request: Abortable | null | undefined) => {
+      if (!request || !pending.delete(request)) return
+      request.abort?.()
+    },
     close: () => {
       generation += 1
       pending.forEach(request => request.abort?.())
