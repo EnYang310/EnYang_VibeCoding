@@ -1,4 +1,4 @@
-# 钱程｜AI 理财启蒙课
+# 钱程｜理财知识启蒙学习Agent
 
 钱程是一套面向理财初学者的 AI 互动课程，不是开放式理财聊天机器人。六门课都有固定、可验证的教学主线；学习者的选择、理由、追问和老师的解释则因人而异。
 
@@ -6,7 +6,7 @@
 
 ## 在线体验
 
-- [在线体验：钱程｜AI 理财启蒙课](https://qiancheng-ai-finance-agent-287874-10-1325700028.sh.run.tcloudbase.com/#/pages/index/index)
+- [在线体验：钱程｜理财知识启蒙学习Agent](https://qiancheng-ai-finance-agent-287874-10-1325700028.sh.run.tcloudbase.com/#/pages/index/index)
 - [GitHub 源码：EnYang310/EnYang_VibeCoding](https://github.com/EnYang310/EnYang_VibeCoding)
 
 > 云端服务采用按需启动。首次访问若暂未加载，请等待 **30–60 秒**，再退出并重新打开体验链接；服务唤醒后可正常进入课程。

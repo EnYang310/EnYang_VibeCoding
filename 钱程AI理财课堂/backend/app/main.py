@@ -27,7 +27,7 @@ load_dotenv(ROOT_DIR / ".env")
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", str(ROOT_DIR / "client" / "dist" / "h5")))
 VOICE_CACHE_DIR = Path(os.getenv("VOICE_CACHE_DIR", str(ROOT_DIR / "data" / "voice-cache")))
 
-app = FastAPI(title="钱程 · 理财第一课", version="1.0.0")
+app = FastAPI(title="钱程｜理财知识启蒙学习Agent", version="1.0.0")
 logger = logging.getLogger(__name__)
 chat_limiter = SlidingWindowLimiter(limit=int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "30")), window_seconds=60)
 voice_limiter = SlidingWindowLimiter(limit=int(os.getenv("VOICE_RATE_LIMIT_PER_MINUTE", "20")), window_seconds=60)

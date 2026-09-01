@@ -775,7 +775,7 @@ function Home({ learning, onStart }: { learning: LearningState, onStart: (id: Co
   const started = COURSE_LIST.filter(course => hasStarted(learning, course.id)).length
   const active = learning.lastCourseId ? COURSE_CONTENT[learning.lastCourseId] : null
   return <View className='page home-page'>
-    <View className='home-nav'><Text className='wordmark'>钱程</Text><Text className='nav-tag'>AI 理财启蒙课</Text></View>
+    <View className='home-nav'><Text className='wordmark'>钱程</Text><Text className='nav-tag'>理财知识启蒙学习Agent</Text></View>
     <View className='hero-block'>
       <Text className='hero-kicker'>不是背术语，是练判断</Text>
       <Text className='hero-title'>先看清你的钱，{`\n`}再决定它去哪里。</Text>
