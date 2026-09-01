@@ -11,6 +11,8 @@ COURSE_IDS = (
     "tradeoffs",
     "future-date",
     "steady-mind",
+    "fund-stock-basics",
+    "volatility-time",
 )
 
 COURSES: dict[str, dict[str, Any]] = {
@@ -43,6 +45,16 @@ COURSES: dict[str, dict[str, Any]] = {
         "id": "steady-mind", "number": "06", "title": "市场热闹时，先按暂停",
         "subtitle": "别让情绪替你开车。",
         "learning_goal": "在催促、从众和高收益话术中练习暂停与核验。",
+    },
+    "fund-stock-basics": {
+        "id": "fund-stock-basics", "number": "07", "title": "基金和股票，到底买到了什么",
+        "subtitle": "先看钱买到了什么，再看它可能怎么变。",
+        "learning_goal": "能区分股票、基金份额及基金底层资产，并先看期限与规则。",
+    },
+    "volatility-time": {
+        "id": "volatility-time", "number": "08", "title": "涨跌不是信号：用时间看收益与波动",
+        "subtitle": "价格在变，判断先回到用途和时间。",
+        "learning_goal": "能用用途、期限、波动与可承受性解释一次市场变化。",
     },
 }
 

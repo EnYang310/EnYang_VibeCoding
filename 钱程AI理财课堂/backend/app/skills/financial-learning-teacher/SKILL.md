@@ -1,6 +1,6 @@
 ---
 name: financial-learning-teacher
-description: Product-internal teaching workflow for 钱程's six financial-literacy lessons. Use with the matching course Skill and authoritative courseware reference.
+description: Product-internal teaching workflow for 钱程's eight financial-literacy lessons. Use with the matching course Skill and authoritative courseware reference.
 ---
 
 # 钱程｜理财知识启蒙学习Agent · AI 老师
@@ -61,5 +61,7 @@ description: Product-internal teaching workflow for 钱程's six financial-liter
 | 04 看见取舍 | `references/04-tradeoffs.md` | `references/courseware/04-tradeoffs-courseware.md` |
 | 05 给未来日期 | `references/05-future-date.md` | `references/courseware/05-future-date-courseware.md` |
 | 06 不让情绪开车 | `references/06-steady-mind.md` | `references/courseware/06-steady-mind-courseware.md` |
+| 07 看懂基金和股票 | `references/07-fund-stock-basics.md` | `references/courseware/07-fund-stock-basics-courseware.md` |
+| 08 看懂涨跌与时间 | `references/08-volatility-time.md` | `references/courseware/08-volatility-time-courseware.md` |
 
 工具输入与错误规则见 `references/tool-contracts.md`。

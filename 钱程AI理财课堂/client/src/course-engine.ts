@@ -4,7 +4,9 @@ export const COURSE_IDS = [
   'product-map',
   'tradeoffs',
   'future-date',
-  'steady-mind'
+  'steady-mind',
+  'fund-stock-basics',
+  'volatility-time'
 ] as const
 
 export const UNIT_IDS = [

@@ -3,7 +3,7 @@ import { createLearningState } from './course-engine'
 import { hydrateLearningState, readLearningHomeState } from './learning-storage'
 
 describe('learning state storage', () => {
-  it('returns a complete six-course state for invalid or legacy data', () => {
+  it('returns a complete eight-course state for invalid or legacy data', () => {
     expect(hydrateLearningState(null)).toEqual(createLearningState())
     expect(hydrateLearningState({ courseId: 'money-jobs', unit: 2 })).toEqual(createLearningState())
   })
@@ -45,5 +45,17 @@ describe('learning state storage', () => {
 
     expect(opened.activeCourseId).toBe('')
     expect(opened.courses['money-jobs'].unitIndex).toBe(3)
+  })
+
+  it('adds blank progress for advanced courses to a saved six-course state', () => {
+    const legacy = JSON.parse(JSON.stringify(createLearningState())) as { courses: Record<string, unknown> }
+    delete legacy.courses['fund-stock-basics']
+    delete legacy.courses['volatility-time']
+    const hydrated = hydrateLearningState(legacy)
+
+    expect(Object.keys(hydrated.courses)).toContain('fund-stock-basics')
+    expect(Object.keys(hydrated.courses)).toContain('volatility-time')
+    expect((hydrated.courses as Record<string, { unitIndex: number; completed: boolean }>)['fund-stock-basics']).toMatchObject({ unitIndex: 0, completed: false })
+    expect((hydrated.courses as Record<string, { unitIndex: number; completed: boolean }>)['volatility-time']).toMatchObject({ unitIndex: 0, completed: false })
   })
 })

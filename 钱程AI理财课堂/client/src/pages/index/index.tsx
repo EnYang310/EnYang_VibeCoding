@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
-import { COURSE_CONTENT, COURSE_LIST, type CourseUnit } from '../../course-content'
+import { COURSE_CONTENT, COURSE_LIST, COURSE_SECTIONS, type CourseUnit } from '../../course-content'
 import { UNIT_IDS, advanceCourse, createLearningState, leaveCourse, openReviewUnit, restartCourse, selectCourse, skipCourseUnit, type CourseId, type LearningState } from '../../course-engine'
 import { readLearningHomeState } from '../../learning-storage'
 import { createLessonSession, type LessonSession } from '../../lesson-session'
@@ -779,14 +779,15 @@ function Home({ learning, onStart }: { learning: LearningState, onStart: (id: Co
     <View className='hero-block'>
       <Text className='hero-kicker'>不是背术语，是练判断</Text>
       <Text className='hero-title'>先看清你的钱，{`\n`}再决定它去哪里。</Text>
-      <Text className='hero-copy'>六门 10–20 分钟互动课。每课有固定教学主线，也给你自由追问、反驳和改答案的空间。</Text>
-      <View className='learning-stats'><View><Text className='stat-number'>{completed}</Text><Text className='stat-label'>已完成</Text></View><View><Text className='stat-number'>{started}</Text><Text className='stat-label'>已开始</Text></View><View><Text className='stat-number'>6</Text><Text className='stat-label'>全部课程</Text></View></View>
+      <Text className='hero-copy'>八门 10–20 分钟互动课。每课有固定教学主线，也给你自由追问、反驳和改答案的空间。</Text>
+      <View className='learning-stats'><View><Text className='stat-number'>{completed}</Text><Text className='stat-label'>已完成</Text></View><View><Text className='stat-number'>{started}</Text><Text className='stat-label'>已开始</Text></View><View><Text className='stat-number'>{COURSE_LIST.length}</Text><Text className='stat-label'>全部课程</Text></View></View>
     </View>
 
     {active && <View className='resume-card' onClick={() => onStart(active.id)}><View><Text className='resume-kicker'>继续上次学习</Text><Text className='resume-title'>{active.number} · {active.title}</Text><Text className='resume-meta'>第 {learning.courses[active.id].unitIndex + 1} / 8 回合</Text></View><Text className='resume-arrow'>→</Text></View>}
 
-    <View className='section-heading'><View><Text className='section-eyebrow'>COURSE MAP</Text><Text className='section-title'>从生活开始学理财</Text></View><Text className='section-count'>6 门</Text></View>
-    <View className='course-grid'>{COURSE_LIST.map(course => {
+    {COURSE_SECTIONS.map(section => <View className='course-section' key={section.title}>
+      <View className='section-heading'><View><Text className='section-eyebrow'>{section.eyebrow}</Text><Text className='section-title'>{section.title}</Text></View><Text className='section-count'>{section.courses.length} 门</Text></View>
+      <View className='course-grid'>{section.courses.map(course => {
       const progress = learning.courses[course.id]
       const status = progress.completed ? '已完成' : hasStarted(learning, course.id) ? `第 ${progress.unitIndex + 1}/8 回合` : '未开始'
       return <View className='course-card' key={course.id} style={{ '--course-accent': course.color } as React.CSSProperties} onClick={() => onStart(course.id)}>
@@ -794,7 +795,8 @@ function Home({ learning, onStart }: { learning: LearningState, onStart: (id: Co
         <Text className='course-title'>{course.title}</Text><Text className='course-subtitle'>{course.subtitle}</Text>
         <View className='course-footer'><View className='mini-progress'>{course.units.map((_, index) => <View key={index} className={`mini-segment ${index < progress.unitIndex || progress.completed ? 'done' : ''}`} />)}</View>{progress.reviewUnits.length > 0 && <Text className='review-badge'>{progress.reviewUnits.length} 待回看</Text>}</View>
       </View>
-    })}</View>
+      })}</View>
+    </View>)}
     <View className='home-principle'><Text className='principle-title'>固定主线，自由课堂</Text><Text>课程不会因聊天跑偏；你可以随时追问，AI 只用当前课件里的知识回应。涉及真实投资决策时，统一回到教育解释与风险提示。</Text></View>
     <View className='compliance-note'>钱程是理财启蒙学习工具，不构成投资建议。</View>
   </View>

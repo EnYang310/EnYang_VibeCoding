@@ -1,9 +1,10 @@
 from app.courseware import evidence_for_unit, load_courseware
 
 
-def test_all_six_courses_have_separate_parseable_courseware():
+def test_all_eight_courses_have_separate_parseable_courseware():
     for course_id in (
-        "money-jobs", "safety-net", "product-map", "tradeoffs", "future-date", "steady-mind"
+        "money-jobs", "safety-net", "product-map", "tradeoffs", "future-date", "steady-mind",
+        "fund-stock-basics", "volatility-time",
     ):
         courseware = load_courseware(course_id)
         assert courseware.course_id == course_id

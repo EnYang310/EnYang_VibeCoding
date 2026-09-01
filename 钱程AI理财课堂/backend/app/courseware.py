@@ -14,6 +14,8 @@ COURSE_FILES = {
     "tradeoffs": "04-tradeoffs-courseware.md",
     "future-date": "05-future-date-courseware.md",
     "steady-mind": "06-steady-mind-courseware.md",
+    "fund-stock-basics": "07-fund-stock-basics-courseware.md",
+    "volatility-time": "08-volatility-time-courseware.md",
 }
 
 UNIT_EVIDENCE = {
@@ -23,6 +25,8 @@ UNIT_EVIDENCE = {
     "tradeoffs": {"ai-feedback-1": ("tradeoffs.core-1",), "ai-feedback-2": ("tradeoffs.core-2", "tradeoffs.core-3")},
     "future-date": {"ai-feedback-1": ("future-date.core-1", "future-date.core-2"), "ai-feedback-2": ("future-date.core-3",)},
     "steady-mind": {"ai-feedback-1": ("steady-mind.core-1", "steady-mind.core-2"), "ai-feedback-2": ("steady-mind.core-1", "steady-mind.core-2", "steady-mind.core-3", "steady-mind.core-4")},
+    "fund-stock-basics": {"ai-feedback-1": ("fund-stock-basics.core-1", "fund-stock-basics.core-2"), "ai-feedback-2": ("fund-stock-basics.core-3", "fund-stock-basics.core-4")},
+    "volatility-time": {"ai-feedback-1": ("volatility-time.core-1", "volatility-time.core-2"), "ai-feedback-2": ("volatility-time.core-3", "volatility-time.core-4")},
 }
 
 
@@ -42,7 +46,7 @@ class Courseware:
     raw_text: str
 
 
-@lru_cache(maxsize=6)
+@lru_cache(maxsize=8)
 def load_courseware(course_id: str) -> Courseware:
     filename = COURSE_FILES.get(course_id)
     if filename is None:
