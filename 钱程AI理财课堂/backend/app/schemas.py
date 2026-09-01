@@ -61,7 +61,7 @@ class TeachingArtifact(BaseModel):
     rather than forcing every lesson through the same card layout.
     """
 
-    kind: Literal["one_liner", "steps", "timeline", "contrast", "scenario", "checklist", "quote", "warning"]
+    kind: Literal["one_liner", "steps", "timeline", "contrast", "scenario", "checklist", "quote", "warning", "cause_chain", "priority_ladder", "reflection"]
     appear_after_paragraph: int = Field(ge=0, le=11)
     title: str = Field(min_length=2, max_length=36)
     lead: str = Field(default="", max_length=120)

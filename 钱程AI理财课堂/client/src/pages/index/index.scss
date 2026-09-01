@@ -1131,3 +1131,36 @@ $green: #2e6d5b;
   .classroom-controls .classroom-composer { position: static; z-index: auto; padding: 10px 14px calc(11px + env(safe-area-inset-bottom)); border-top: 0; border-bottom: 0; box-shadow: none; }
   .classroom-transcript { padding-bottom: 236px; }
 }
+
+/* Distinct teaching layouts: each card makes a different kind of reasoning
+   visible instead of reusing one generic text panel. */
+.artifact-cause-chain { border-color: #b9d8cb; background: linear-gradient(145deg, #edf8f2, #ffffff 68%); }
+.cause-chain-list { display: grid; gap: 10px; margin-top: 18px; }
+.cause-chain-step { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 11px; padding: 13px 14px; border-radius: 11px; color: var(--qc-ink); background: rgba(255,255,255,.82); font-size: clamp(17px, 1.15vw, 22px); font-weight: 760; line-height: 1.5; }
+.cause-chain-index { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; color: #fff; background: var(--qc-accent); font-size: 13px; font-weight: 900; }
+.cause-chain-arrow { grid-column: 1 / -1; justify-self: center; margin: -2px 0 -9px; color: var(--qc-accent); font-size: 20px; font-weight: 900; }
+.artifact-priority-ladder { border-color: #cfddd5; background: #fbfdfc; }
+.priority-ladder-list { display: grid; gap: 8px; margin-top: 18px; }
+.priority-ladder-row { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 12px; padding: 13px 14px; border-radius: 10px; color: var(--qc-ink); background: var(--qc-soft); font-size: clamp(17px, 1.15vw, 22px); font-weight: 760; line-height: 1.48; }
+.priority-ladder-row:nth-child(1) { background: #dff3e8; }
+.priority-ladder-row:nth-child(2) { background: #edf7f1; }
+.priority-ladder-rank { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #9acbb4; border-radius: 8px; color: var(--qc-accent-dark); background: #fff; font-size: 16px; font-weight: 900; }
+.artifact-reflection { border-color: #bcd8cd; background: linear-gradient(135deg, #e5f6ed, #f7fcf9); text-align: center; }
+.artifact-reflection .artifact-title { max-width: 24ch; margin: 0 auto; }
+.reflection-question { display: block; max-width: 30ch; margin: 15px auto 3px; color: var(--qc-body); font-size: clamp(20px, 1.45vw, 27px); font-weight: 750; line-height: 1.62; }
+.next-scene-button { width: 100%; min-height: 52px; margin-top: 10px; border: 1px solid var(--qc-accent) !important; border-radius: 11px !important; color: var(--qc-accent-dark) !important; background: var(--qc-accent-wash) !important; font-size: clamp(16px, 1.05vw, 20px) !important; font-weight: 850 !important; }
+.next-scene-button:active:not([disabled]) { transform: translateY(1px); background: #dff2e7 !important; }
+.back-button { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--qc-line); border-radius: 50%; color: var(--qc-ink); background: #fff; font-size: 38px; font-weight: 400; line-height: 1; }
+.lesson-page .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
+.lesson-page .topbar-brand { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.lesson-page .topbar .wordmark { white-space: nowrap; }
+.lesson-page .topbar .text-button { justify-self: end; }
+
+@media (max-width: 760px) {
+  .artifact-cause-chain, .artifact-priority-ladder, .artifact-reflection { padding: 21px 18px; }
+  .cause-chain-step, .priority-ladder-row { font-size: 22px; line-height: 1.55; }
+  .reflection-question { font-size: 25px; line-height: 1.64; }
+  .next-scene-button { min-height: 58px; font-size: 20px !important; }
+  .back-button { width: 38px; height: 38px; font-size: 35px; }
+  .lesson-page .topbar { gap: 9px; }
+}

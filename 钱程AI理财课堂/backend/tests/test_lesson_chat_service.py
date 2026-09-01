@@ -55,6 +55,29 @@ def test_generated_reply_keeps_a_partial_teacher_scene_instead_of_discarding_the
     assert result.teaching_scene.teaching_artifacts == []
 
 
+def test_generated_reply_accepts_distinct_visual_teaching_layouts():
+    result = _safe_chat_generated(
+        {
+            "reply": "先把近期用途和可能变化拆开，你会更容易判断下一步。",
+            "evidence_ids": ["money-jobs.core-1"],
+            "teaching_scene": {
+                "screen_title": "先看顺序",
+                "full_caption": ["先看用途，再看日期。"],
+                "teaching_artifacts": [
+                    {"kind": "cause_chain", "title": "为什么会挤掉房租", "items": ["用途没拆开", "临时支出出现", "近期任务被挤压"]},
+                    {"kind": "priority_ladder", "title": "先保谁", "items": ["下月房租", "三个月后报名费", "没有日期的零用钱"]},
+                    {"kind": "reflection", "title": "带回生活", "lead": "你今天最早必须用的一笔钱是什么？"},
+                ],
+            },
+        },
+        allowed_evidence_ids={"money-jobs.core-1"},
+    )
+
+    assert result is not None
+    assert result.teaching_scene is not None
+    assert [artifact.kind for artifact in result.teaching_scene.teaching_artifacts] == ["cause_chain", "priority_ladder", "reflection"]
+
+
 @pytest.mark.parametrize(
     "reply",
     [

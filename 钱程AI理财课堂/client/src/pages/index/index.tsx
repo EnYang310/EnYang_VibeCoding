@@ -11,13 +11,14 @@ import { shouldSettleVoiceScene } from '../../voice-settlement'
 import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isCorrectInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
 import { clearPendingCardAdvance, hydratePendingCardAdvances, pendingCardAdvanceForCourse, savePendingCardAdvance, type PendingCardAdvance, type PendingCardAdvances } from '../../pending-card-advance'
+import { manualSceneTransition } from '../../manual-scene-transition'
 import './index.scss'
 
 const STORAGE_KEY = 'qiancheng-learning-v1'
 const CLASSROOM_STORAGE_KEY = 'qiancheng-classroom-v1'
 
 type EvidenceNote = { evidence_id: string, text: string }
-type TeachingArtifactKind = 'one_liner' | 'steps' | 'timeline' | 'contrast' | 'scenario' | 'checklist' | 'quote' | 'warning'
+type TeachingArtifactKind = 'one_liner' | 'steps' | 'timeline' | 'contrast' | 'scenario' | 'checklist' | 'quote' | 'warning' | 'cause_chain' | 'priority_ladder' | 'reflection'
 type TeachingArtifact = { kind: TeachingArtifactKind, appear_after_paragraph: number, title: string, lead: string, items: string[], note: string }
 type TeachingScene = { screen_title: string, screen_summary: string, key_points: string[], common_misconception: string, right_reframe: string, subtitle_excerpt: string, full_caption: string[], teaching_artifacts?: TeachingArtifact[] }
 type ChatMessage = {
@@ -583,11 +584,27 @@ export default function Index() {
     }
   }
 
-  const skip = () => {
-    if (!course || !unit) return
-    persist(skipCourseUnit(learning, course.id))
-    setPendingCardAdvances(current => clearPendingCardAdvance(current, course.id))
+  const enterNextScene = () => {
+    if (!course || !unit || !progress || cardLoading) return
+    const confirmedAnswer = awaitingNext?.unitId === unit.id ? awaitingNext.answer : ''
+    const transition = manualSceneTransition({ unitIndex: progress.unitIndex, unitCount: course.units.length, confirmedAnswer })
+    if (!transition) return
+    // This is an explicit learner choice to leave the current scene.  Cancel
+    // stale narration and requests before progress changes so a late teacher
+    // result cannot append an old scene or release its deferred card.
+    lessonSessionRef.current.close()
+    turnSequenceRef.current += 1
+    autoReadNextSceneRef.current = false
+    lectureVoice.stop()
+    setDeferredCard(null)
+    setPresentedCard(null)
+    setAwaitingNext(null)
+    setSending(false)
+    setSubmittingInteraction(false)
     setAnswer('')
+    setCourseChatCompleted(false)
+    if (transition.saveAnswer) persist(advanceCourse(learning, course.id, { answer: transition.saveAnswer }))
+    else persist(skipCourseUnit(learning, course.id))
   }
 
   const lectureMessages = chat.filter(item => item.role === 'assistant' && item.teachingScene)
@@ -619,8 +636,11 @@ export default function Index() {
 
   if (!course || !progress || !unit) return <Home learning={learning} onStart={startCourse} />
   return <View className='page lesson-page' style={{ '--course-accent': course.color } as React.CSSProperties}>
-    <View className='topbar'>
-      <Text className='wordmark' onClick={goHome}>钱程</Text>
+  <View className='topbar'>
+      <View className='topbar-brand'>
+        <Text className='back-button' onClick={goHome}>‹</Text>
+        <Text className='wordmark' onClick={goHome}>钱程</Text>
+      </View>
       <Text className='lesson-position'>{course.number} / 06</Text>
       <Text className='text-button' onClick={goHome}>课程地图</Text>
     </View>
@@ -658,7 +678,8 @@ export default function Index() {
         </View>
         <View className='classroom-composer'>
           <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
-          <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
+          {!freeQuestionMode && progress.unitIndex < course.units.length - 1 && <Button className='next-scene-button' disabled={cardLoading} onClick={enterNextScene}>进入下一场景</Button>}
+          <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '不想继续等时，可以直接进入下一场景；未作答的题会保留为待回看。'}</Text>
         </View>
       </View>
     </View>
@@ -717,16 +738,19 @@ function TeachingSceneMessage({ message, voice }: { message: ChatMessage, voice:
     <View className='scene-heading'><Text className='teacher-line'>程老师 · 本段讲解</Text><View className={`voice-toggle ${isSpeaking ? 'speaking' : ''}`} onClick={() => voice.toggle(sceneId, scene.full_caption)}><Text>{isSpeaking ? (voice.status.paused ? '▶ 继续朗读' : 'Ⅱ 暂停朗读') : '🔊 朗读本段'}</Text></View></View>
     <Text className='scene-title'>{scene.screen_title}</Text>
     <Text className='scene-summary'>{scene.screen_summary}</Text>
-    <View className='artifact-stream'>{artifacts.slice(0, visibleArtifactCount).map((artifact, index) => <TeachingArtifactCard key={`${sceneId}-${artifact.kind}-${index}`} artifact={artifact} index={index} />)}</View>
+    <View className='artifact-stream'>{artifacts.slice(0, visibleArtifactCount).map((artifact, index) => <TeachingArtifactCard key={`${sceneId}-${artifact.kind}-${index}`} artifact={artifact} />)}</View>
   </View>
 }
 
-function TeachingArtifactCard({ artifact, index }: { artifact: TeachingArtifact, index: number }) {
-  const label: Record<TeachingArtifactKind, string> = { one_liner: '一句话看懂', steps: '顺着想', timeline: '时间线', contrast: '别混在一起', scenario: '放进生活里', checklist: '自己核验', quote: '值得记住', warning: '容易踩坑' }
+function TeachingArtifactCard({ artifact }: { artifact: TeachingArtifact }) {
+  const label: Record<TeachingArtifactKind, string> = { one_liner: '一句话看懂', steps: '顺着想', timeline: '时间线', contrast: '别混在一起', scenario: '放进生活里', checklist: '自己核验', quote: '值得记住', warning: '容易踩坑', cause_chain: '因果链', priority_ladder: '先后顺序', reflection: '带回生活' }
   if (artifact.kind === 'timeline') return <View className='artifact-card artifact-timeline'><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}<View className='timeline-artifact-list'>{artifact.items.map((item, itemIndex) => <View className='timeline-artifact-row' key={`${item}-${itemIndex}`}><Text className='timeline-artifact-dot' /><Text>{item}</Text></View>)}</View>{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
   if (artifact.kind === 'steps' || artifact.kind === 'checklist') return <View className={`artifact-card artifact-${artifact.kind}`}><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}<View className='artifact-step-list'>{artifact.items.map((item, itemIndex) => <View className='artifact-step' key={`${item}-${itemIndex}`}><Text className='artifact-step-mark'>{artifact.kind === 'checklist' ? '✓' : String(itemIndex + 1).padStart(2, '0')}</Text><Text>{item}</Text></View>)}</View>{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
   if (artifact.kind === 'contrast') return <View className='artifact-card artifact-contrast'><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text><View className='contrast-columns'>{artifact.items.slice(0, 2).map((item, itemIndex) => <View className={`contrast-column ${itemIndex === 0 ? 'left' : 'right'}`} key={`${item}-${itemIndex}`}><Text>{item}</Text></View>)}</View>{artifact.lead && <Text className='artifact-note'>{artifact.lead}</Text>}{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
-  return <View className={`artifact-card artifact-${artifact.kind}`}><Text className='artifact-label'>{label[artifact.kind]} · {String(index + 1).padStart(2, '0')}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}{artifact.items.length > 0 && <View className='artifact-plain-items'>{artifact.items.map((item, itemIndex) => <Text key={`${item}-${itemIndex}`}>• {item}</Text>)}</View>}{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
+  if (artifact.kind === 'cause_chain') return <View className='artifact-card artifact-cause-chain'><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}<View className='cause-chain-list'>{artifact.items.map((item, itemIndex) => <View className='cause-chain-step' key={`${item}-${itemIndex}`}><Text className='cause-chain-index'>{String(itemIndex + 1).padStart(2, '0')}</Text><Text>{item}</Text>{itemIndex < artifact.items.length - 1 && <Text className='cause-chain-arrow'>↓</Text>}</View>)}</View>{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
+  if (artifact.kind === 'priority_ladder') return <View className='artifact-card artifact-priority-ladder'><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}<View className='priority-ladder-list'>{artifact.items.map((item, itemIndex) => <View className='priority-ladder-row' key={`${item}-${itemIndex}`}><Text className='priority-ladder-rank'>{itemIndex + 1}</Text><Text>{item}</Text></View>)}</View>{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
+  if (artifact.kind === 'reflection') return <View className='artifact-card artifact-reflection'><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text><Text className='reflection-question'>{artifact.lead || artifact.items[0]}</Text>{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
+  return <View className={`artifact-card artifact-${artifact.kind}`}><Text className='artifact-label'>{label[artifact.kind]}</Text><Text className='artifact-title'>{artifact.title}</Text>{artifact.lead && <Text className='artifact-lead'>{artifact.lead}</Text>}{artifact.items.length > 0 && <View className='artifact-plain-items'>{artifact.items.map((item, itemIndex) => <Text key={`${item}-${itemIndex}`}>• {item}</Text>)}</View>}{artifact.note && <Text className='artifact-note'>{artifact.note}</Text>}</View>
 }
 
 function LessonMessages({ messages, voice }: { messages: ChatMessage[], voice: ReturnType<typeof useLectureVoice> }) {
