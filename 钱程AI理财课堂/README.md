@@ -4,6 +4,21 @@
 
 产品只做金融素养教育：不推荐真实产品，不给出买卖指令、仓位、资产配置比例或收益承诺。
 
+## 在线体验与作品展示
+
+- [在线体验：钱程｜AI 理财启蒙课](https://qiancheng-ai-finance-agent-287874-10-1325700028.sh.run.tcloudbase.com/#/pages/index/index)
+- [GitHub 源码：EnYang310/EnYang_VibeCoding](https://github.com/EnYang310/EnYang_VibeCoding)
+
+> 服务处于按需运行状态，首次打开可能需要冷启动。若页面暂未加载，请等待 **30–60 秒**，退出后重新打开体验链接即可。
+
+<p align="center">
+  <img src="docs/images/portfolio/course-home.jpg" width="31%" alt="课程首页与学习地图" />
+  <img src="docs/images/portfolio/lesson-visual-cards.jpg" width="31%" alt="可视化理财讲解卡片" />
+  <img src="docs/images/portfolio/lesson-interaction.jpg" width="31%" alt="互动选择与老师讲解" />
+</p>
+
+钱程把“讲道理”改成可跟随的课堂：用生活情境、可视化要点卡、选择题反馈和 AI 老师追问，把现金流、缓冲、风险与反诈等概念放回具体日常决策中。课程支持中途退出后继续学习，也可以随时进入下一场景。
+
 ## 产品闭环
 
 每门课约 10–20 分钟，包含 8 个回合：
