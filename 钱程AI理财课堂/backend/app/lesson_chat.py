@@ -8,7 +8,7 @@ from app.kimi import KimiClient
 from app.lesson_runtime import COURSE_FOCUS, UNIT_IDS, UNIT_TITLES
 from app.learning_gates import criteria_for
 from app.schemas import ChatRequest, ChatResponse, EvidenceNote, TeachingArtifact, TeachingScene
-from app.teaching_flow import append_course_finished_closing
+from app.teaching_flow import COURSE_FINISHED_CLOSING, append_course_finished_closing
 
 
 REAL_DECISION_TERMS = (
@@ -51,7 +51,19 @@ def needs_compliance_redirect(message: str) -> bool:
 def finish_free_question_mode(response: ChatResponse, *, course_finished: bool) -> ChatResponse:
     if course_finished:
         room_for_reply = 400 - len(append_course_finished_closing("")) - 1
-        return response.model_copy(update={"reply": append_course_finished_closing(response.reply[:room_for_reply])})
+        final_scene = response.teaching_scene
+        if final_scene and final_scene.full_caption:
+            last_caption = final_scene.full_caption[-1]
+            if COURSE_FINISHED_CLOSING not in last_caption:
+                caption_room = 180 - len(COURSE_FINISHED_CLOSING) - 1
+                last_caption = append_course_finished_closing(last_caption[:caption_room])
+            final_scene = final_scene.model_copy(update={
+                "full_caption": [*final_scene.full_caption[:-1], last_caption],
+            })
+        return response.model_copy(update={
+            "reply": append_course_finished_closing(response.reply[:room_for_reply]),
+            "teaching_scene": final_scene,
+        })
     hook = response.next_step_invitation or "想把它放进自己的生活里，再追问一个最想弄明白的地方吗？"
     reply = response.reply.strip()
     if reply.endswith(hook):

@@ -250,3 +250,5 @@ async def test_final_action_card_is_sent_to_the_teacher_as_a_completed_answer(mo
         "is_correct": True,
     }
     assert "这一课的知识点已经讲完了。之后有任何问题，随时问我。" in response.reply
+    assert response.teaching_scene is not None
+    assert response.teaching_scene.full_caption[-1].endswith("这一课的知识点已经讲完了。之后有任何问题，随时问我。")
