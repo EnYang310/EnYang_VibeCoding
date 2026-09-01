@@ -1,5 +1,6 @@
 import pytest
 import httpx
+import json
 
 from app.kimi import KimiClient
 
@@ -64,3 +65,51 @@ async def test_lesson_generation_cancels_the_provider_attempt_at_ninety_seconds(
 
     assert result is None
     assert attempts == [90.0]
+
+
+@pytest.mark.asyncio
+async def test_final_card_prompt_requires_the_closing_in_the_spoken_caption(monkeypatch):
+    captured = {}
+
+    class SuccessfulResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps({
+                "reply": "你先问日期。",
+                "evidence_ids": ["money-jobs.core-1"],
+            }, ensure_ascii=False)}}]}
+
+    class SuccessfulClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return SuccessfulResponse()
+
+    monkeypatch.setenv("MOONSHOT_API_KEY", "test-key-is-long-enough")
+    monkeypatch.setattr("app.kimi.httpx.AsyncClient", SuccessfulClient)
+    client = KimiClient()
+    original_request_body = client.request_body
+
+    def capture_request_body(prompt):
+        captured["prompt"] = prompt
+        return original_request_body(prompt)
+
+    monkeypatch.setattr(client, "request_body", capture_request_body)
+    await client.lesson_chat(
+        course_title="钱程课", unit_title="课后带走一句话", learning_focus="先看用途和日期",
+        evidence=[{"evidence_id": "money-jobs.core-1", "text": "先看用途。", "boundary": "只做学习解释"}],
+        message="我选了先问日期。", history=[], learner_work=[], pending_review_units=[], advancement_criteria=[],
+        course_finished=True, free_chat_mode=False, offer_transition=True, compliance_redirect=False,
+    )
+
+    assert captured["prompt"]["lesson_stage"] == "final_action_card"
+    assert any("full_caption 的最后一段" in rule for rule in captured["prompt"]["rules"])
