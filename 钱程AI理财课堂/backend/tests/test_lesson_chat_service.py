@@ -31,6 +31,20 @@ def test_generated_reply_rejects_transaction_instruction():
     assert result is None
 
 
+def test_generated_reply_keeps_a_mechanism_explanation_about_buying_stock():
+    result = _safe_chat_generated(
+        {
+            "reply": "买股票指的是取得一家公司的部分所有权，并不等于拿到固定利息或收益保证。",
+            "evidence_ids": ["fund-stock-basics.core-1"],
+            "learning_signals": [],
+            "advance_recommendation": "stay",
+        },
+        allowed_evidence_ids={"fund-stock-basics.core-1"},
+    )
+
+    assert result is not None
+
+
 def test_generated_reply_keeps_a_partial_teacher_scene_instead_of_discarding_the_turn():
     result = _safe_chat_generated(
         {
