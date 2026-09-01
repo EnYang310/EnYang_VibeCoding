@@ -12,6 +12,7 @@ import { InteractionPanel } from './interaction-panel'
 import { completionHint, humanizeInteractionAnswer, isCorrectInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
 import { clearPendingCardAdvance, hydratePendingCardAdvances, pendingCardAdvanceForCourse, savePendingCardAdvance, type PendingCardAdvance, type PendingCardAdvances } from '../../pending-card-advance'
 import { manualSceneTransition } from '../../manual-scene-transition'
+import { hasTeacherFeedback, matchingNextInteractionCard } from '../../interaction-turn-response'
 import './index.scss'
 
 const STORAGE_KEY = 'qiancheng-learning-v1'
@@ -521,7 +522,7 @@ export default function Index() {
           }
         }, session)
         const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
-        if (result.statusCode >= 400 || !data.assistant_reply?.reply || data.tool_call) throw new Error('action card feedback failed')
+        if (result.statusCode >= 400 || !hasTeacherFeedback(data)) throw new Error('action card feedback failed')
         if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
         setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene, turnId }] }))
         persist(advanceCourse(learning, course.id, { answer: submitted }))
@@ -559,15 +560,17 @@ export default function Index() {
           }
       }, session)
       const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
-      if (result.statusCode >= 400 || !data.assistant_reply?.reply || (data.tool_call && (data.tool_call.tool_name !== 'present_interaction_card' || data.tool_call.unit_id !== nextUnit.id))) throw new Error('interaction turn failed')
+      if (result.statusCode >= 400 || !hasTeacherFeedback(data)) throw new Error('interaction turn failed')
       if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
-      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene, turnId }] }))
-      if (data.tool_call?.tool_name === 'present_interaction_card' && data.tool_call.unit_id === nextUnit.id) {
-        const feedbackScene = data.assistant_reply.teaching_scene
+      const teacherFeedback = data.assistant_reply!
+      setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: teacherFeedback.reply!, evidenceIds: teacherFeedback.evidence_ids || [], evidenceNotes: teacherFeedback.evidence_notes || [], source: teacherFeedback.source || 'local_fallback', teachingScene: teacherFeedback.teaching_scene, turnId }] }))
+      if (matchingNextInteractionCard(data, nextUnit.id)) {
+        const nextCard = data.tool_call as PresentedCard
+        const feedbackScene = teacherFeedback.teaching_scene
         if (feedbackScene) {
-          setDeferredCard({ sceneId: sceneVoiceId(unit.id, feedbackScene), card: data.tool_call, answer: submitted })
+          setDeferredCard({ sceneId: sceneVoiceId(unit.id, feedbackScene), card: nextCard, answer: submitted })
         } else {
-          setPresentedCard(data.tool_call)
+          setPresentedCard(nextCard)
           persist(advanceCourse(learning, course.id, { answer: submitted }))
           setAnswer('')
           setAwaitingNext(null)
