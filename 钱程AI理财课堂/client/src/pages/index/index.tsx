@@ -67,7 +67,7 @@ function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown, ses
       path,
       method,
       data,
-      header: { 'X-WX-SERVICE': CLOUDBASE_SERVICE, 'content-type': 'application/json' }
+      header: { 'X-WX-SERVICE': CLOUDBASE_SERVICE, 'X-Qiancheng-Audio-Format': 'base64', 'content-type': 'application/json' }
     })
     // callContainer currently exposes a promise instead of a request task.
     // Keep the same cancellable shape so retries can still invalidate stale UI.
@@ -78,7 +78,7 @@ function apiRequest<T>(path: string, method: 'GET' | 'POST', data?: unknown, ses
   const timeout = setTimeout(() => controller.abort(), MODEL_REQUEST_TIMEOUT_MS)
   const request = fetch(`${API_BASE}${path}`, {
     method,
-    headers: data === undefined ? undefined : { 'content-type': 'application/json' },
+    headers: data === undefined ? undefined : { 'content-type': 'application/json', 'X-Qiancheng-Audio-Format': 'url' },
     body: data === undefined ? undefined : JSON.stringify(data),
     signal: controller.signal,
   }).then(async response => {

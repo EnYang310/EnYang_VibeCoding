@@ -38,7 +38,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Qiancheng-Audio-Format"],
 )
 
 
@@ -209,16 +209,17 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
         raise HTTPException(status_code=499, detail="课程已离开，已取消本次讲解") from exc
 
 
-@app.post("/api/v1/voice/synthesize", response_model=VoiceSynthesisResponse)
+@app.post("/api/v1/voice/synthesize", response_model=VoiceSynthesisResponse, response_model_exclude_none=True)
 async def synthesize_voice(request: VoiceSynthesisRequest, http_request: Request) -> VoiceSynthesisResponse:
     try:
         # Tencent's SDK is synchronous.  Running it in the event loop made one
         # long narration block every chat/card request behind it.  Keep the
         # API async so a first-paragraph request can start playing while the
         # client fetches the remaining paragraphs in parallel.
+        include_audio_base64 = http_request.headers.get("X-Qiancheng-Audio-Format", "base64") != "url"
         segments = await await_while_connected(
             http_request,
-            asyncio.to_thread(voice_service.synthesize_paragraphs, request.paragraphs),
+            asyncio.to_thread(voice_service.synthesize_paragraphs, request.paragraphs, include_audio_base64=include_audio_base64),
         )
         logger.info("voice_synthesis provider=tencent voice_type=%s segments=%s", voice_service.voice_type, len(segments))
         return VoiceSynthesisResponse(segments=segments, provider="tencent", voice_type=voice_service.voice_type)

@@ -20,7 +20,7 @@ class TencentVoiceService:
     def voice_type(self) -> int:
         return int(os.getenv("TENCENT_TTS_VOICE_TYPE", "101001"))
 
-    def synthesize_paragraphs(self, paragraphs: list[str]) -> list[VoiceSegment]:
+    def synthesize_paragraphs(self, paragraphs: list[str], *, include_audio_base64: bool = True) -> list[VoiceSegment]:
         secret_id = os.getenv("TENCENT_SECRET_ID", "").strip()
         secret_key = os.getenv("TENCENT_SECRET_KEY", "").strip()
         if not secret_id or not secret_key:
@@ -78,7 +78,7 @@ class TencentVoiceService:
             segments.append(
                 VoiceSegment(
                     audio_url=f"/media/voice/{filename}",
-                    audio_base64=base64.b64encode(target.read_bytes()).decode("ascii"),
+                    audio_base64=base64.b64encode(target.read_bytes()).decode("ascii") if include_audio_base64 else None,
                     subtitles=subtitles,
                 )
             )
