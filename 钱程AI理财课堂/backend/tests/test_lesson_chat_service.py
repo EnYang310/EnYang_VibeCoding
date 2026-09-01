@@ -45,6 +45,20 @@ def test_generated_reply_keeps_a_mechanism_explanation_about_buying_stock():
     assert result is not None
 
 
+def test_generated_reply_keeps_general_product_literacy_that_uses_buying_words():
+    result = _safe_chat_generated(
+        {
+            "reply": "可以把买基金先理解为取得基金份额；在判断前，要先看它主要投向什么和自己的使用日期。",
+            "evidence_ids": ["fund-stock-basics.core-2"],
+            "learning_signals": [],
+            "advance_recommendation": "stay",
+        },
+        allowed_evidence_ids={"fund-stock-basics.core-2"},
+    )
+
+    assert result is not None
+
+
 def test_generated_reply_keeps_a_partial_teacher_scene_instead_of_discarding_the_turn():
     result = _safe_chat_generated(
         {

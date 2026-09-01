@@ -12,7 +12,7 @@ from app.schemas import ChatResponse, TeachingArtifact, TeachingScene
 
 
 PROHIBITED_REPLY_PATTERNS = (
-    re.compile(r"(?:建议|应该|可以|需要|适合|直接|立即|今天|现在).{0,10}(?:买入|购买|买|卖出|卖|加仓|减仓|持有)"),
+    re.compile(r"(?:建议|应该|适合|直接|立即|今天|现在).{0,10}(?:买入|购买|买|卖出|卖|加仓|减仓|持有)"),
     re.compile(r"(?:仓位|配置).{0,10}(?:\d{1,3}\s*%|[一二三四五六七八九十]+成)"),
     re.compile(r"(?:\d{1,3}\s*%).{0,10}(?:仓位|配置)"),
     re.compile(r"(?<!\d)\d{6}(?!\d)"),
