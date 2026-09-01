@@ -29,6 +29,11 @@ export function isInteractionComplete(unit: CourseUnit, value: string): boolean 
   return unit.interaction === 'single-choice' && Boolean(unit.options?.includes(selectedChoice(unit, value)))
 }
 
+export function isCorrectInteractionAnswer(unit: CourseUnit, value: string): boolean | null {
+  const selected = selectedChoice(unit, value)
+  return selected && unit.correctOption ? selected === unit.correctOption : null
+}
+
 export function shouldRevealChoiceReview(unit: CourseUnit, value: string, confirmed: boolean): boolean {
   return confirmed && isInteractionComplete(unit, value) && Boolean(unit.correctOption)
 }

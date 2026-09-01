@@ -9,7 +9,7 @@ import { shouldRevealDeferredInteractionCard, type DeferredInteractionCard } fro
 import { answerReceivedMessage, answerRequestFailedMessage } from '../../teacher-turn-feedback'
 import { shouldSettleVoiceScene } from '../../voice-settlement'
 import { InteractionPanel } from './interaction-panel'
-import { completionHint, humanizeInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
+import { completionHint, humanizeInteractionAnswer, isCorrectInteractionAnswer, isInteractionComplete, reviewedChoice } from '../../interaction-answer'
 import { clearPendingCardAdvance, hydratePendingCardAdvances, pendingCardAdvanceForCourse, savePendingCardAdvance, type PendingCardAdvance, type PendingCardAdvances } from '../../pending-card-advance'
 import './index.scss'
 
@@ -510,6 +510,8 @@ export default function Index() {
             pending_review_units: progress!.reviewUnits,
             current_card_completed: true,
             current_card_answer: humanizeInteractionAnswer(submitted),
+            correct_answer: unit.correctOption || '',
+            answer_is_correct: isCorrectInteractionAnswer(unit, submitted),
             assistant_replies_since_card: messagesFor(unit.id).filter(item => item.role === 'assistant' && !item.pending).length,
             course_finished: true,
             free_chat_mode: false
@@ -546,6 +548,8 @@ export default function Index() {
             pending_review_units: progress!.reviewUnits,
             current_card_completed: true,
             current_card_answer: humanizeInteractionAnswer(submitted),
+            correct_answer: unit.correctOption || '',
+            answer_is_correct: isCorrectInteractionAnswer(unit, submitted),
             assistant_replies_since_card: messagesFor(unit.id).filter(item => item.role === 'assistant' && !item.pending).length,
             course_finished: false,
             free_chat_mode: false
@@ -646,14 +650,16 @@ export default function Index() {
         })}
         {(cardLoading || waitingForNextCard) && <View className='stage-loading'><Text>{waitingForNextCard ? '本段讲解结束后，下一道题会出现。' : '程老师正在准备下一个学习环节…'}</Text></View>}
       </ScrollView>
-      <View className='caption-dock'>
-        {lectureVoice.status.sceneId && <View className='caption-pause' onClick={() => lectureVoice.toggle(lectureVoice.status.sceneId!, [])}><Text>{lectureVoice.status.paused ? '▶' : 'Ⅱ'}</Text></View>}
-        {lectureVoice.status.sceneId && lectureVoice.status.subtitles.length > 0 ? <SyncedCaption subtitles={lectureVoice.status.subtitles} activeIndex={lectureVoice.status.activeIndex} /> : <Text className='caption-short'>点击“朗读本段”后，字幕将跟随语音逐字同步。</Text>}
-        <Text className='caption-expand' onClick={() => setCaptionExpanded(true)}>展开字幕全文</Text>
-      </View>
-      <View className='classroom-composer'>
-        <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
-        <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
+      <View className='classroom-controls'>
+        <View className='caption-dock'>
+          {lectureVoice.status.sceneId && <View className='caption-pause' onClick={() => lectureVoice.toggle(lectureVoice.status.sceneId!, [])}><Text>{lectureVoice.status.paused ? '▶' : 'Ⅱ'}</Text></View>}
+          {lectureVoice.status.sceneId && lectureVoice.status.subtitles.length > 0 ? <SyncedCaption subtitles={lectureVoice.status.subtitles} activeIndex={lectureVoice.status.activeIndex} /> : <Text className='caption-short'>点击“朗读本段”后，字幕将跟随语音逐字同步。</Text>}
+          <Text className='caption-expand' onClick={() => setCaptionExpanded(true)}>展开字幕全文</Text>
+        </View>
+        <View className='classroom-composer'>
+          <View className='chat-compose'><Input value={chatDraft} disabled={waitingForNextCard || submittingInteraction} maxlength={500} onInput={event => setChatDraft(event.detail.value)} onConfirm={sendChat} placeholder={waitingForNextCard ? '请先听完这一段讲解…' : submittingInteraction ? '程老师正在结合你的答案讲解…' : '随时问程老师：解释、反驳、举例都可以…'} /><Button disabled={sending || submittingInteraction || waitingForNextCard || !chatDraft.trim()} onClick={sendChat}>{sending ? '…' : '发送'}</Button></View>
+          <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '自由提问不会跳过学习环节；程老师会在合适的学习节点自然带你进入下一题。'}</Text>
+        </View>
       </View>
     </View>
     {captionExpanded && <View className='caption-sheet'><View className='caption-sheet-inner'><Text className='caption-sheet-label'>本课讲解全文 · 已累计 {lectureScenes.length} 段</Text>{(lectureScenes.length > 0 ? lectureScenes : [scene]).map((lecture, sceneIndex) => <View key={`${lecture.screen_title}-${sceneIndex}`} className='caption-lesson'><Text className='caption-sheet-title'>{lecture.screen_title}</Text>{lecture.full_caption.map((paragraph, index) => <Text className='caption-paragraph' key={`${paragraph}-${index}`}>{paragraph}</Text>)}</View>)}<Button className='secondary-action caption-close' onClick={() => setCaptionExpanded(false)}>返回继续听</Button></View></View>}
@@ -693,7 +699,7 @@ function TeachingSceneMessage({ message, voice }: { message: ChatMessage, voice:
   const isSpeaking = voice.status.sceneId === sceneId
   const artifacts = scene.teaching_artifacts || []
   const [played, setPlayed] = useState(false)
-  const [visibleArtifactCount, setVisibleArtifactCount] = useState(0)
+  const [visibleArtifactCount, setVisibleArtifactCount] = useState(() => Math.min(1, artifacts.length))
   useEffect(() => {
     if (isSpeaking) {
       setPlayed(true)
@@ -701,6 +707,10 @@ function TeachingSceneMessage({ message, voice }: { message: ChatMessage, voice:
     } else if (played) {
       // Pausing, skipping, or finishing never leaves the lesson half-hidden.
       setVisibleArtifactCount(artifacts.length)
+    } else {
+      // The first visual anchor should be useful before a mobile browser has
+      // accepted audio playback.  Later artifacts still unfold with speech.
+      setVisibleArtifactCount(Math.min(1, artifacts.length))
     }
   }, [isSpeaking, voice.status.paragraphIndex, played, artifacts.length])
   return <View className='teaching-scene-message'>

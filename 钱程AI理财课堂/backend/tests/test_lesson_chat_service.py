@@ -179,3 +179,51 @@ async def test_completed_interaction_keeps_the_teacher_response_personalized(mon
     assert "房租日期提前" not in response.reply
     assert response.teaching_scene.teaching_artifacts[-1].title == "想一想，再告诉老师"
     assert response.teaching_scene.teaching_artifacts[-1].lead == "如果房租日期提前，你觉得这个判断会怎么变？"
+
+
+@pytest.mark.asyncio
+async def test_final_action_card_is_sent_to_the_teacher_as_a_completed_answer(monkeypatch):
+    captured = {}
+
+    async def fake_lesson_chat(*_args, **kwargs):
+        captured.update(kwargs)
+        return ChatResponse(
+            reply="你先问最早使用日期，这一步没有被热闹带跑。",
+            evidence_ids=["money-jobs.core-1"],
+            learning_signals=[],
+            suggested_optional_card=None,
+            advance_recommendation="stay",
+            teaching_decision="advance",
+            observed_criteria=[],
+            missing_criterion=None,
+            teaching_scene=TeachingScene(
+                screen_title="先问日期",
+                full_caption=["先把最早使用日期问清楚，再决定这笔钱能不能动。"],
+            ),
+            compliance_mode="education_only",
+            source="kimi",
+        )
+
+    monkeypatch.setattr("app.lesson_chat.KimiClient.lesson_chat", fake_lesson_chat)
+    response = await personalized_lesson_chat(
+        ChatRequest(
+            course_id="money-jobs",
+            unit_id="action-card",
+            message="【课程完成】我完成了行动卡：你的选择：它最早什么时候要用？",
+            context={
+                "current_card_completed": True,
+                "current_card_answer": "你的选择：它最早什么时候要用？",
+                "correct_answer": "它最早什么时候要用？",
+                "answer_is_correct": True,
+                "course_finished": True,
+            },
+        )
+    )
+
+    assert captured["offer_transition"] is True
+    assert captured["answer_feedback"] == {
+        "student_answer": "你的选择：它最早什么时候要用？",
+        "correct_answer": "它最早什么时候要用？",
+        "is_correct": True,
+    }
+    assert "这一课的知识点已经讲完了。之后有任何问题，随时问我。" in response.reply

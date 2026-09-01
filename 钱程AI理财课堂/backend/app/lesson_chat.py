@@ -151,7 +151,17 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         # Real purchase, sale, allocation and product-selection questions never
         # reach the external model. The boundary is deterministic, not prompt-only.
         return finish_free_question_mode(courseware_fallback(request), course_finished=request.context.course_finished)
-    offer_transition = request.message.startswith("我完成了这张互动卡")
+    # Both the regular interaction endpoint and the final action-card endpoint
+    # submit a confirmed answer.  The latter has a different user-facing
+    # message, so matching copy here silently dropped its teacher feedback.
+    offer_transition = request.context.current_card_completed
+    answer_feedback = None
+    if offer_transition:
+        answer_feedback = {
+            "student_answer": sanitize_user_text(request.context.current_card_answer)[:180],
+            "correct_answer": sanitize_user_text(request.context.correct_answer)[:180],
+            "is_correct": request.context.answer_is_correct,
+        }
     generated = await KimiClient().lesson_chat(
         course_title=course["title"],
         unit_title=unit_title,
@@ -168,6 +178,7 @@ async def personalized_lesson_chat(request: ChatRequest) -> ChatResponse:
         course_finished=request.context.course_finished,
         free_chat_mode=request.context.free_chat_mode,
         offer_transition=offer_transition,
+        answer_feedback=answer_feedback,
         compliance_redirect=False,
     )
     if generated is None:

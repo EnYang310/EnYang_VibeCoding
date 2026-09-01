@@ -13,6 +13,11 @@ class LearningContext(BaseModel):
     pending_review_units: list[Annotated[int, Field(ge=0, le=7)]] = Field(default_factory=list, max_length=8)
     current_card_completed: bool = False
     current_card_answer: str = Field(default="", max_length=2400)
+    # The interaction UI owns the authored answer key.  These values only
+    # guide the teacher's feedback tone after confirmation; they never drive
+    # course progression or any financial recommendation.
+    correct_answer: str = Field(default="", max_length=2400)
+    answer_is_correct: bool | None = None
     awaiting_next: bool = False
     next_unit_id: str = Field(default="", max_length=48)
     # Replies already delivered after the learner answered the current card.

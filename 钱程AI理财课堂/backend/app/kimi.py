@@ -206,6 +206,7 @@ class KimiClient:
         free_chat_mode: bool,
         offer_transition: bool,
         compliance_redirect: bool,
+        answer_feedback: dict[str, Any] | None = None,
     ) -> ChatResponse | None:
         key = self._key()
         if len(key) < 10:
@@ -229,12 +230,13 @@ class KimiClient:
             "course_finished": course_finished,
             "free_chat_mode": free_chat_mode,
             "current_card_completed": offer_transition,
+            "answer_feedback": answer_feedback or {},
             "latest_message": message,
             "compliance_redirect": compliance_redirect,
             "rules": [
                 "只能使用 allowed_courseware 中的知识；不知道就明确说本课课件没有覆盖。",
                 "reply 用一句自然回应即可；完整授课放入 teaching_scene。一条 teaching_scene 就是一轮完整课堂讲解：screen_title 不超过 16 字，screen_summary 是一句白话结论，full_caption 必须是 6 到 8 段完整讲解；每段严格控制为 2 到 3 句、55 到 130 个中文字符。按“生活场景→核心规则→为什么会出问题→具体例子→容易混淆处→回到学生自己的判断”推进，不要堆术语，也不要半句话就结束。teaching_artifacts 是随讲解出现的视觉教学组件，必须高频：有 N 段 full_caption 就生成 N-1 个组件，并让 appear_after_paragraph 精确覆盖 0、1、…、N-2；即每讲完 2 到 3 句话马上出现一个能帮助理解当前知识的组件。不能返回空数组。kind 只能是 one_liner（一句话看懂）、steps（因果或判断步骤）、timeline（先后顺序）、contrast（两个容易混淆的概念对照）、scenario（生活情境拆解）、checklist（核验清单）、quote（值得记住的结论）、warning（容易踩坑的提醒）。根据当前知识选择合适 kind，并尽量让相邻组件不同；不要为凑数重复内容。每个组件有 appear_after_paragraph、title、lead、items（0 到 4 条）、note。",
-                "如果 current_card_completed 为 true：不要逐字复述选项，不要做泛泛表扬；围绕用户答案解释当前知识点，并根据 advancement_criteria 决定是否已具备进入下一道生活情境题的基础。够了就 teaching_decision=advance，系统会自然呈现下一道题；不够就 teaching_decision=probe 或 repair，用一个有针对性的追问或生活例子继续带向缺口。绝不能让用户通过说“继续、下一步”来触发题目，也绝不能对用户说“卡片、下一张卡、发卡”等内部实现词。",
+                "如果 current_card_completed 为 true：answer_feedback 是已确认的课堂判定。answer_feedback.is_correct 为 true 时，先具体认可学生选项里的判断依据，再把这个依据讲透，绝不能把正确答案说成需要纠正；为 false 时，温和指出答案漏掉的条件并说明正确判断；为 null 时只围绕答案启发讲解。不要逐字复述选项，不要做泛泛表扬；并根据 advancement_criteria 决定是否已具备进入下一道生活情境题的基础。够了就 teaching_decision=advance，系统会自然呈现下一道题；不够就 teaching_decision=probe 或 repair，用一个有针对性的追问或生活例子继续带向缺口。绝不能让用户通过说“继续、下一步”来触发题目，也绝不能对用户说“卡片、下一张卡、发卡”等内部实现词。",
                 "不推荐真实金融产品，不给买卖指令、仓位、配置比例、收益预测或承诺。",
                 "若 compliance_redirect 为 true，明确说明不能替用户做真实投资决定，然后提供通用核验框架。",
                 "先判断 advancement_criteria：满足才 teaching_decision=advance；缺一个点 teaching_decision=probe；存在关键误解 teaching_decision=repair。不能因为用户填了卡就 advance。",
