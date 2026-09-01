@@ -405,7 +405,7 @@ export default function Index() {
     if (!course) return
     Taro.showModal({
       title: '从头学习这一课？',
-      content: '只清除本课的回答、待回看和行动卡；另外五课不会受影响。',
+      content: '只清除本课的回答、待回看和行动卡；其他课程不会受影响。',
       confirmText: '重新开始',
       success: result => {
         if (result.confirm) {
@@ -686,11 +686,11 @@ export default function Index() {
           {!freeQuestionMode && progress.unitIndex < course.units.length - 1 && <Button className='next-scene-button' disabled={cardLoading} onClick={enterNextScene}>进入下一场景</Button>}
           <Text className='chat-tip'>{waitingForNextCard ? '程老师讲完后会进入下一道题。' : freeQuestionMode ? '这一课已经讲完。接下来可以自由问任何概念或生活情境。' : '不想继续等时，可以直接进入下一场景；未作答的题会保留为待回看。'}</Text>
         </View>
+        <Button className='fixed-restart-button' onClick={restart}>从头学习本课</Button>
+        <View className='fixed-compliance-note'>本产品仅用于理财启蒙学习，不提供真实标的推荐、买卖指令或个性化资产配置。</View>
       </View>
     </View>
     {captionExpanded && <View className='caption-sheet'><View className='caption-sheet-inner'><Text className='caption-sheet-label'>本课讲解全文 · 已累计 {lectureScenes.length} 段</Text>{(lectureScenes.length > 0 ? lectureScenes : [scene]).map((lecture, sceneIndex) => <View key={`${lecture.screen_title}-${sceneIndex}`} className='caption-lesson'><Text className='caption-sheet-title'>{lecture.screen_title}</Text>{lecture.full_caption.map((paragraph, index) => <Text className='caption-paragraph' key={`${paragraph}-${index}`}>{paragraph}</Text>)}</View>)}<Button className='secondary-action caption-close' onClick={() => setCaptionExpanded(false)}>返回继续听</Button></View></View>}
-    <Text className='restart-link' onClick={restart}>从头学习本课</Text>
-    <View className='compliance-note'>本产品仅用于理财启蒙学习，不提供真实标的推荐、买卖指令或个性化资产配置。</View>
   </View>
 }
 
