@@ -14,7 +14,7 @@ from app.course_data import list_courses
 from app.interaction_tools import next_unit_after, present_interaction_card
 from app.learning_gates import infer_observed_criteria, passes_gate
 from app.lesson_chat import TeacherModelUnavailable, personalized_lesson_chat
-from app.lesson_runtime import COURSE_FOCUS, get_lesson
+from app.lesson_runtime import COURSE_FOCUS, UNIT_IDS, get_lesson
 from app.rate_limit import SlidingWindowLimiter
 from app.request_lifecycle import ClientDisconnected, await_while_connected
 from app.schemas import ChatRequest, ChatResponse, InteractionCardRequest, InteractionCardResponse, InteractionTurnRequest, InteractionTurnResponse, VoiceSynthesisRequest, VoiceSynthesisResponse
@@ -159,9 +159,14 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
         raise HTTPException(status_code=422, detail="课程或回合不存在")
     started_at = time.perf_counter()
     try:
-        # Do not trust the client to skip cards. The tool may only present the
-        # direct successor of the card whose work was just submitted.
-        if request.next_unit_id != next_unit_after(request.unit_id):
+        is_final_card = request.unit_id == UNIT_IDS[-1]
+        # Do not trust the client to skip cards. A normal card may only present
+        # its direct successor; the action card has no successor but still
+        # returns the exact same assistant_reply envelope.
+        if is_final_card:
+            if request.next_unit_id or not request.context.course_finished:
+                raise ValueError("invalid final interaction")
+        elif request.next_unit_id != next_unit_after(request.unit_id):
             raise ValueError("invalid next unit")
         enriched = request.model_copy(
             update={
@@ -171,6 +176,7 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
                         "answer_summaries": [*request.context.answer_summaries, f"本回合回答：{request.submitted_answer}"][-8:],
                         "current_card_completed": True,
                         "current_card_answer": request.submitted_answer,
+                        "course_finished": is_final_card,
                     }
                 ),
             }
@@ -180,7 +186,7 @@ async def interaction_turn(request: InteractionTurnRequest, http_request: Reques
         )
         tool_call = None
         gate_passed = passes_gate(request.unit_id, feedback.teaching_decision, feedback.observed_criteria)
-        if should_present_next_card(
+        if not is_final_card and should_present_next_card(
             current_card_completed=True,
             course_finished=request.context.course_finished or request.context.free_chat_mode,
             next_unit_id=request.next_unit_id,

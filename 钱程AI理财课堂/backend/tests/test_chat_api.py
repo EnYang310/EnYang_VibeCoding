@@ -105,3 +105,31 @@ def test_interaction_submission_queues_the_next_card_after_the_teacher_turn(monk
     assert body["assistant_reply"]["source"] == "kimi"
     assert body["tool_call"]["tool_name"] == "present_interaction_card"
     assert body["tool_call"]["unit_id"] == "hands-on"
+
+
+def test_final_action_card_uses_the_same_interaction_reply_envelope(monkeypatch):
+    async def fake_chat(request):
+        assert request.unit_id == "action-card"
+        assert request.context.course_finished is True
+        assert request.context.current_card_completed is True
+        return ChatResponse(
+            reply="你先问使用日期，判断就不会被热闹带跑。这一课的知识点已经讲完了。之后有任何问题，随时问我。",
+            evidence_ids=["money-jobs.core-1"], evidence_notes=[], learning_signals=[],
+            suggested_optional_card=None, advance_recommendation="stay", teaching_decision="advance",
+            observed_criteria=[], missing_criterion=None, compliance_mode="education_only", source="kimi",
+        )
+
+    monkeypatch.setattr("app.main.personalized_lesson_chat", fake_chat)
+    response = TestClient(app).post(
+        "/api/v1/lessons/interaction-turn",
+        json={
+            "course_id": "money-jobs", "unit_id": "action-card", "next_unit_id": "",
+            "submitted_answer": "它最早什么时候要用？", "message": "提交互动卡", "history": [],
+            "context": {"current_card_completed": True, "course_finished": True},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["assistant_reply"]["reply"].endswith("之后有任何问题，随时问我。")
+    assert body["tool_call"] is None

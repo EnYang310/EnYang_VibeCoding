@@ -501,10 +501,12 @@ export default function Index() {
     setSubmittingInteraction(true)
     if (!nextUnit) {
       try {
-        const result = await apiRequest<{ reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }>('/api/v1/lessons/chat', 'POST', {
+        const result = await apiRequest<{ assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }>('/api/v1/lessons/interaction-turn', 'POST', {
           course_id: course.id,
           unit_id: unit.id,
-          message: `【课程完成】我完成了行动卡：${humanizeInteractionAnswer(submitted)}`,
+          next_unit_id: '',
+          submitted_answer: humanizeInteractionAnswer(submitted),
+          message: '提交互动卡',
           history: chat.slice(-6).map(item => ({ role: item.role, content: item.text })),
           context: {
             answer_summaries: Object.entries(progress!.answers).map(([index, text]) => `回合 ${Number(index) + 1}：${humanizeInteractionAnswer(text).slice(0, 300)}`),
@@ -518,10 +520,10 @@ export default function Index() {
             free_chat_mode: false
           }
         }, session)
-        const data = result.data as { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }
-        if (result.statusCode >= 400 || !data.reply) throw new Error('action card feedback failed')
+        const data = result.data as { assistant_reply?: { reply?: string, evidence_ids?: string[], evidence_notes?: EvidenceNote[], source?: 'kimi' | 'local_fallback', teaching_scene?: TeachingScene }, tool_call?: PresentedCard | null }
+        if (result.statusCode >= 400 || !data.assistant_reply?.reply || data.tool_call) throw new Error('action card feedback failed')
         if (turnId !== turnSequenceRef.current || !session.isCurrent(sessionToken)) return
-        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.reply!, evidenceIds: data.evidence_ids || [], evidenceNotes: data.evidence_notes || [], source: data.source || 'local_fallback', teachingScene: data.teaching_scene, turnId }] }))
+        setChatByUnit(current => ({ ...current, [chatKey]: [...(current[chatKey] || []).filter(item => item.turnId !== turnId || !item.pending), { role: 'assistant', unitId: unit.id, text: data.assistant_reply!.reply!, evidenceIds: data.assistant_reply!.evidence_ids || [], evidenceNotes: data.assistant_reply!.evidence_notes || [], source: data.assistant_reply!.source || 'local_fallback', teachingScene: data.assistant_reply!.teaching_scene, turnId }] }))
         persist(advanceCourse(learning, course.id, { answer: submitted }))
         setAnswer('')
         setPresentedCard(null)

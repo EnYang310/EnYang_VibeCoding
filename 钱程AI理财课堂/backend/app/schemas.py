@@ -132,7 +132,9 @@ class ChatResponse(BaseModel):
 
 class InteractionTurnRequest(ChatRequest):
     submitted_answer: str = Field(min_length=1, max_length=2400)
-    next_unit_id: str = Field(min_length=1, max_length=48)
+    # Final action cards have no successor. They still use this same response
+    # envelope, with an empty next_unit_id and no tool call.
+    next_unit_id: str = Field(default="", max_length=48)
 
 
 class InteractionTurnResponse(BaseModel):
