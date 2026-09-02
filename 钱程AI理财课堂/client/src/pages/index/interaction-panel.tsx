@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Text, View } from '@tarojs/components'
 import type { CourseUnit } from '../../course-content'
 import { decodeInteractionAnswer, encodeInteractionAnswer, reviewedChoice, shouldRevealChoiceReview } from '../../interaction-answer'
+import { orderedChoiceOptions } from '../../choice-order'
 
 type Props = { unit: CourseUnit; value: string; accent: string; confirmed?: boolean; onChange: (value: string) => void }
 
@@ -10,6 +11,7 @@ export function InteractionPanel({ unit, value, accent, confirmed = false, onCha
     const data = decodeInteractionAnswer(value, unit.interaction)
     return typeof data.choice === 'string' ? data.choice : ''
   }, [unit.interaction, value])
+  const options = useMemo(() => orderedChoiceOptions(unit), [unit])
   const choiceReview = reviewedChoice(unit, value)
   if (unit.interaction === 'narrative') return null
   return <View className='single-choice-panel'>
@@ -17,7 +19,7 @@ export function InteractionPanel({ unit, value, accent, confirmed = false, onCha
     <Text className='choice-context'>{unit.questionContext}</Text>
     <Text className='choice-question'>{unit.prompt}</Text>
     <View className='single-choice-options'>
-      {unit.options?.map((option, index) => <View
+      {options.map((option, index) => <View
         key={option}
         className={`single-choice-option ${selected === option ? 'selected' : ''}`}
         style={{ '--course-accent': accent } as React.CSSProperties}
